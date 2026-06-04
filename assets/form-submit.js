@@ -12,6 +12,7 @@
 
 import { updateProgress } from './form-init.js';
 import { AppState } from './app-state.js';
+import { logEvent } from './logger-client.js';
 import { mapFormToBitrixFields } from './field-mapper.js';
 import {
   OPTS_YES_NO, OPTS_SALARY_CARD, OPTS_MARITAL, OPTS_CHILDREN
@@ -374,7 +375,11 @@ export function saveForm() {
   const formData = collectFormData();
 
   // Шаг 2: Валидируем все 11 обязательных полей. Если не прошло — прерываем, ошибки уже показаны.
-  if (!validateForm(formData)) return;
+  if (!validateForm(formData)) {
+    logEvent('FORM_VALIDATION_FAILED', { fio: formData.fio || '', city: formData.clientCity || '' });
+    return;
+  }
+  logEvent('FORM_SAVE_START', { fio: formData.fio || '', city: formData.clientCity || '' });
 
   // Шаг 3: Блокируем кнопку сохранения, чтобы менеджер не нажал её дважды.
   const btnSave = document.getElementById('btn-save');
@@ -423,6 +428,7 @@ export function saveForm() {
 
     // Шаг 5b: Если API вернул ошибку — показываем уведомление менеджеру.
     if (result.error()) {
+      logEvent('FORM_SAVE_ERROR', { error: String(result.error()) });
       showError(`Ошибка сохранения: ${result.error()}`); // showError() определена в app.js
     } else {
       // Шаг 5c: Успешное сохранение лида — обновляем ФИО в связанном контакте (если есть).
@@ -664,9 +670,11 @@ export function addTimelineComment(formData) {
     // Если API вернул ошибку при записи в таймлайн — показываем предупреждение.
     // (Данные лида при этом уже сохранены — ошибка только в таймлайне.)
     if (result.error()) {
+      logEvent('TIMELINE_ERROR', { error: String(result.error()) });
       showError(`Ошибка записи в таймлайн: ${result.error()}`); // showError() из app.js
     } else {
       // Успешная запись в таймлайн — показываем уведомление «Анкета сохранена».
+      logEvent('FORM_SAVED', { fio: formData.fio || '', city: formData.clientCity || '' });
       showSuccess(); // showSuccess() из app.js — зелёный тост/баннер
     }
   });
@@ -716,6 +724,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Пересчитываем прогресс заполнения — после сброса счётчик должен обновиться.
         updateProgress();
+        logEvent('FORM_RESET', null);
       }
     });
   }

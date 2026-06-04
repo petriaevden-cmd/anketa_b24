@@ -36,7 +36,6 @@ $currentUser = [
     'LAST_NAME' => (string)($_REQUEST['USER_LAST_NAME'] ?? ''),
     'EMAIL'     => (string)($_REQUEST['USER_EMAIL']  ?? ''),
 ];
-
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -46,9 +45,10 @@ $currentUser = [
   <title>Анкета</title>
 
   <!--
-    BX24 JS SDK для handler на внешнем домене (apcheit.ru) нужно подключать явно —
-    портал не инжектит bx24.js в наш HTML. Как в install.php: CDN api.bitrix24.com.
-    В dev-режиме (вне iframe) webhook-client.js подменит window.BX24 shim'ом.
+    BX24 JS SDK подключается самим Битрикс24 при загрузке iframe-плейсмента:
+    портал оборачивает наш контент и выдаёт window.BX24 с реальным
+    OAuth-токеном. Ручное подключение SDK не требуется.
+    При прямом открытии (dev/QA) BX24 подменяется shim'ом из assets/webhook-client.js.
   -->
 
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -79,7 +79,9 @@ $currentUser = [
       // Текущий пользователь, открывший приложение.
       // В dev-режиме (webhook-shim) используется как MOCK_CURRENT_USER.
       // В iframe-режиме не используется — BX24 SDK возвращает реального юзера сам.
-      currentUser:  <?= json_encode($currentUser, JSON_UNESCAPED_UNICODE) ?>
+      currentUser:  <?= json_encode($currentUser, JSON_UNESCAPED_UNICODE) ?>,
+      // URL файла лога — используется для ссылки в шапке и в logger-client.js.
+      logUrl: '<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') ?>/logs.txt'
     };
   </script>
 
@@ -103,14 +105,10 @@ $currentUser = [
     показывался mock-лид (или дефолт 59466) и mock-юзер «Тестовый Пользователь».
   -->
   <?php
-    // Серверное определение: приложение внутри iframe Битрикс24.
-    // DOMAIN — всегда; APP_SID / AUTH_ID / IFRAME=Y — в зависимости от типа плейсмента
-    // (в т.ч. SIDE_SLIDER в карточке лида).
-    $isInsideBitrix = !empty($_REQUEST['DOMAIN']) && (
-        !empty($_REQUEST['APP_SID'])
-        || !empty($_REQUEST['AUTH_ID'])
-        || (($_REQUEST['IFRAME'] ?? '') === 'Y')
-    );
+    // Серверное определение: приложение запущено внутри Битрикс24,
+    // если переданы параметры DOMAIN и APP_SID — их подкладывает
+    // сам портал при загрузке iframe плейсмента.
+    $isInsideBitrix = !empty($_REQUEST['DOMAIN']) && !empty($_REQUEST['APP_SID']);
     // Инвертируем: webhook-режим нужен только когда мы НЕ внутри Битрикс24.
     $useWebhook = $isInsideBitrix ? 'false' : 'true';
   ?>
@@ -118,8 +116,6 @@ $currentUser = [
     // Автоопределение режима. Значение подставляется сервером как литерал true/false.
     window.APP_USE_WEBHOOK = <?= $useWebhook ?>;
   </script>
-  <!-- SDK нужен и в iframe (OAuth), и как база перед webhook-shim в dev. -->
-  <script src="//api.bitrix24.com/api/v1/"></script>
   <!-- tz-utils.js должен загружаться ДО webhook-client.js -->
   <script src="assets/tz-utils.js"></script>
   <script src="assets/webhook-client.js"></script>
@@ -131,7 +127,13 @@ $currentUser = [
 <div id="app" class="flex flex-col h-screen">
 
   <header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 shrink-0">
-    <div class="font-bold text-gray-900 text-sm tracking-tight">Анкета</div>
+    <a id="app-title-link"
+       href="#"
+       target="_blank"
+       rel="noopener noreferrer"
+       class="font-bold text-gray-900 text-sm tracking-tight no-underline hover:underline hover:text-blue-600 transition-colors cursor-default hover:cursor-pointer"
+       title="Открыть лог-файл"
+       onclick="if(window.APP_CONFIG&&window.APP_CONFIG.logUrl){this.href=window.APP_CONFIG.logUrl;}return true;">Анкета</a>
     <div class="w-px h-4 bg-gray-200"></div>
     <div id="lead-title" class="text-xs text-gray-500 truncate">Лид — загрузка...</div>
     <div class="ml-auto flex items-center gap-2 text-xs text-gray-400">

@@ -17,6 +17,7 @@
 // остальные модули через ES-import.
 
 import { AppState } from './app-state.js';
+import { logEvent } from './logger-client.js';
 import { initForm, updateProgress, updateTargetStatusWidget } from './form-init.js';
 import { saveForm, collectFormData } from './form-submit.js';
 import { initCalendar, setOnRenderComplete } from './calendar-render.js';
@@ -55,12 +56,9 @@ window.setOnRenderComplete = setOnRenderComplete;
 
 // Запускаем инициализацию приложения через SDK Bitrix24
 // Callback выполняется только после того, как BX24 готов к работе
-if (typeof window.BX24 === 'undefined') {
-  showError(
-    'BX24 SDK не загружен. В iframe Битрикс24 нужен //api.bitrix24.com/api/v1/ в index.php; ' +
-    'вне iframe — включите webhook-shim (APP_USE_WEBHOOK).'
-  );
-} else {
+// Логируем запуск приложения — до получения leadId и пользователя.
+logEvent('APP_START', { url: window.location.href });
+
 BX24.init(function () {
 
   // Получаем информацию о текущем плейсменте (месте встраивания приложения в Bitrix24)
@@ -93,7 +91,9 @@ BX24.init(function () {
 
   // Ни плейсмент, ни URL не дали корректный ID — работать не с чем.
   if (!leadId) {
-    showError('Не удалось получить ID лида: ни placement.options.ID, ни ?clientID/?leadID в URL.');
+    const errMsg = 'Не удалось получить ID лида: ни placement.options.ID, ни ?clientID/?leadID в URL.';
+    logEvent('LEAD_ID_MISSING', { placementOptions: placement?.options ?? null });
+    showError(errMsg);
     return; // Без ID лида инициализация невозможна.
   }
 
@@ -117,13 +117,15 @@ BX24.init(function () {
 
       // Проверяем, не вернул ли запрос данных лида ошибку
       if (results.getLead.error()) {
-        // Если ошибка есть — показываем её пользователю и останавливаем инициализацию
-        showError(`Ошибка загрузки лида: ${results.getLead.error()}`);
+        const errMsg = `Ошибка загрузки лида: ${results.getLead.error()}`;
+        logEvent('LEAD_LOAD_ERROR', { leadId: leadId, error: String(results.getLead.error()) });
+        showError(errMsg);
         return; // Дальнейшая работа без данных лида невозможна
       }
 
       // Извлекаем объект с полями лида из успешного ответа
       const lead = results.getLead.data();
+      logEvent('LEAD_LOADED', { leadId: leadId, title: lead.TITLE || '' });
 
       // Извлекаем объект с данными текущего пользователя из ответа и сохраняем в AppState.
       const currentUser = results.getCurrentUser.data();
@@ -205,10 +207,11 @@ BX24.init(function () {
       // Если функция startPolling определена — запускаем периодический опрос сервера
       // Это нужно для автоматического обновления данных (например, статуса слотов) без перезагрузки страницы
       if (typeof startPolling  === 'function') startPolling();
+
+      logEvent('APP_READY', { leadId: leadId });
     }
   );
 });
-}
 
 /**
  * showError — отображает сообщение об ошибке на странице.
