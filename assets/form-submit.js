@@ -51,13 +51,14 @@ export const REQUIRED_FIELDS = [
   { key: 'firstName',     elId: 'f-first-name',            label: 'Укажите имя' },
   { key: 'maritalStatus', elId: 'f-marital',               label: 'Укажите семейное положение' },
   { key: 'children',      elId: 'f-children',              label: 'Укажите количество детей' },
-  { key: 'jointProperty', elId: 'f-joint-property',        label: 'Укажите совместное имущество' },
-  { key: 'criminal',      elId: 'f-criminal',              label: 'Укажите наличие судимостей' },
-  { key: 'ooo',           elId: 'f-ooo',                   label: 'Укажите наличие ООО' },
-  { key: 'ip',            elId: 'f-ip',                    label: 'Укажите наличие ИП' },
+  // v5-latest: поля стали radio-переключателями, elId указывает на первую radio-кнопку группы
+  { key: 'jointProperty', elId: 'section-7-body',          label: 'Укажите совместное имущество' },
+  { key: 'criminal',      elId: 'section-9-body',          label: 'Укажите наличие судимостей' },
+  { key: 'ooo',           elId: 'section-8-body',          label: 'Укажите наличие ООО' },
+  { key: 'ip',            elId: 'section-8-body',          label: 'Укажите наличие ИП' },
   { key: 'debtTotal',     elId: 'f-debt-total',            label: 'Укажите сумму долга' },
-  { key: 'property',      elId: 'f-property',              label: 'Укажите наличие имущества' },
-  { key: 'deals',         elId: 'f-deals',                 label: 'Укажите наличие сделок' }
+  { key: 'property',      elId: 'section-6-body',          label: 'Укажите наличие имущества' },
+  { key: 'deals',         elId: 'section-6-body',          label: 'Укажите наличие сделок' }
 ];
 
 /**
@@ -208,9 +209,15 @@ export function collectFormData() {
   // Собираем и возвращаем объект со всеми полями.
   // Ключи объекта — произвольные camelCase-имена (используются в saveForm/addTimelineComment).
   // Значения — результаты вызова v() с id конкретного поля.
-  const collateral = v('f-collateral');
-  const property   = v('f-property');
-  const deals      = v('f-deals');
+  // v5-latest: вспомогательная функция для radio-групп (читает checked radio по name).
+  function vr(name) {
+    const el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : '';
+  }
+
+  const collateral = vr('collateral');
+  const property   = vr('property');
+  const deals      = vr('deals');
 
   // v3-latest: фамилия / имя / отчество — 3 отдельных поля.
   // fio собираем сразу же («Фамилия Имя Отчество») для обратной совместимости
@@ -231,10 +238,10 @@ export function collectFormData() {
     // а без входного поля UI этого значения никто не передаст.
     maritalStatus:     v('f-marital'),                   // Семейное положение (значение из OPTS_MARITAL)
     children:          v('f-children'),                  // Количество детей (значение из OPTS_CHILDREN)
-    jointProperty:     v('f-joint-property'),            // Совместное имущество (Y/N)
-    criminal:          v('f-criminal'),                  // Судимости (Y/N)
-    ooo:               v('f-ooo'),                       // ООО (Y/N)
-    ip:                v('f-ip'),                        // ИП (Y/N)
+    jointProperty:     vr('jointProperty'),              // Совместное имущество (Y/N) — radio
+    criminal:          vr('criminal'),                   // Судимости (Y/N) — radio
+    ooo:               vr('ooo'),                        // ООО (Y/N) — radio
+    ip:                vr('ip'),                         // ИП (Y/N) — radio
     // v3-latest: денежные поля — читаем из dataset.raw (без разделителей тысяч)
     debtTotal:         vMoney('f-debt-total'),           // Общая сумма долга, ₽
     monthlyPayment:    vMoney('f-monthly-payment'),      // Ежемесячный платёж, ₽
@@ -247,9 +254,9 @@ export function collectFormData() {
     salaryCard:        v('f-salary-card'),               // Зарплатная карта (sber/other/none)
     creditors:         v('f-creditors'),                 // Перечень кредиторов
     collateral:        collateral,                       // Залоговое имущество (Y/N) — для target-status.js
-    deposit:           collateral,                       // То же значение под именем поля UF_DEPOSIT — для маппера
+    deposit:           vr('deposit'),                     // Удержания с дохода (Y/N) — radio
     overdue:           v('f-overdue'),                   // Просрочки (текст)
-    fssp:              v('f-fssp'),                      // Исполнительные производства ФССП (Y/N)
+    fssp:              vr('fssp'),                       // Исполнительные производства ФССП (Y/N) — radio
     property:          property,                         // Имущество в собственности (Y/N) — для target-status.js
     possessions:       property,                         // То же под именем поля UF_POSSESSIONS — для маппера
     deals:             deals,                            // Сделки с имуществом за 3 года (Y/N)
@@ -270,20 +277,37 @@ export function collectFormData() {
     // Используются ТОЛЬКО внутри evaluateTargetStatus() и в timeline-комментарии.
     // В crm.lead.update НЕ передаются — на портале полей под них нет и создавать
     // их без явного подтверждения пользователя запрещено.
-    mortgage:                vc('f-mortgage'),                 // Есть ипотека
-    mortgageNoGuarantor:     vc('f-mortgage-no-guarantor'),    // Ипотека: нет созаёмщика
-    mortgageBadOverdue:      vc('f-mortgage-bad-overdue'),     // Ипотека: просрочки не закрыть
-    collateralReadyToPart:   vc('f-collateral-ready-to-part'), // Залог: готов расстаться
-    propertyOverDebt:        vc('f-property-over-debt'),       // Доп. имущество: стоимость > долга
-    propertyReadyForRisks:   vc('f-property-ready-for-risks'), // Доп. имущество: готов к рискам
-    dealsDuringOverdue:      vc('f-deals-during-overdue'),     // Сделки в период просрочек
-    oooHasBalance:           vc('f-ooo-has-balance'),          // ООО: есть баланс
-    oooReadyToPart:          vc('f-ooo-ready-to-part'),        // ООО: готов расстаться
-    criminal159SameGrounds:  vc('f-criminal-159-same'),        // Судимость 159 УК РФ по тем же основаниям
-    forOther:                vc('f-for-other'),                // Обращение за другого человека
-    nonDischargeable:        vc('f-non-dischargeable'),        // Долг не подлежит списанию
-    otherCompanyAS:          vc('f-other-company-as'),         // Уже подан в АС другой компанией
-    incomeKmBad:             vc('f-income-km-bad'),            // Невыгодно по расчёту КМ
+    // v5-latest: уточняющие признаки нецелевой — теперь radio-кнопки в разделах анкеты
+    mortgage:                vr('mortgage'),                  // Есть ипотека — radio
+    mortgageNoGuarantor:     (vr('mortgageHasGuarantor') === 'N') ? 'Y' : (vr('mortgageHasGuarantor') === 'Y' ? 'N' : ''), // инверсия
+    mortgageBadOverdue:      vr('mortgageBadOverdue'),        // Ипотека: просрочки — radio
+    collateralReadyToPart:   vr('collateralReadyToPart'),     // Залог: готов расстаться — radio
+    propertyOverDebt:        (function() {
+      // Автоматически считается по репитеру имущества vs сумма долга
+      const debtRaw = (document.getElementById('f-debt-total') || {}).dataset;
+      const debt = debtRaw ? parseInt(debtRaw.raw || '0', 10) : 0;
+      const rows = document.querySelectorAll('#property-list .property-row');
+      let propSum = 0;
+      const excludeCar = (document.getElementById('f-exclude-car') || {}).checked;
+      rows.forEach(function(row) {
+        const typeEl = row.querySelector('[data-prop-type]');
+        const valEl  = row.querySelector('[data-prop-value]');
+        if (typeEl && valEl) {
+          if (excludeCar && typeEl.value === 'car') return;
+          propSum += parseInt((valEl.dataset && valEl.dataset.raw) || '0', 10) || 0;
+        }
+      });
+      return (debt > 0 && propSum > debt) ? 'Y' : 'N';
+    })(),
+    propertyReadyForRisks:   vr('propertyReadyForRisks'),     // Готов к рискам — radio
+    dealsDuringOverdue:      vr('dealsDuringOverdue'),         // Сделки в просрочку — radio
+    oooHasBalance:           vr('oooHasBalance'),              // ООО: баланс — radio
+    oooReadyToPart:          vr('oooReadyToPart'),             // ООО: готов расстаться — radio
+    criminal159SameGrounds:  vr('criminal159SameGrounds'),     // Судимость 159 — radio
+    forOther:                vr('forOther'),                   // За другого — radio
+    nonDischargeable:        vr('nonDischargeable'),           // Несписываемый долг — radio
+    otherCompanyAS:          vr('otherCompanyAS'),             // Другая компания в АС — radio
+    incomeKmBad:             vr('incomeKmBad'),                // Невыгодно по КМ — radio
 
     // ── Итоговый статус «Целевой/Нецелевой» ──────────────────────────────────
     // Берём из window.__targetStatus (обновляется каждый раз при change на форме).

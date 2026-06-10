@@ -6,12 +6,21 @@
  * Frontend: Tailwind CSS 4 + Flowbite 2
  * Самописные CSS-файлы НЕ подключаются.
  *
- * Порядок блоков (синхронизирован с form.js):
- *   1. Персональные данные  (#personal-body)  — включает поле «Город» → TZ
- *   2. Финансовые данные   (#finance-body)
- *   3. Кредитная история   (#credit-body)
- *   4. Заметки менеджера  (#manager-body)
- *   5. Запись на встречу  (#booking-body)
+ * Порядок блоков (v5-latest, синхронизирован с form-init.js):
+ *   Поле «Город»  (#city-field-body)   — отдельно вверху
+ *   1. Как могу обращаться?     (#section-1-body)   — ФИО
+ *   2. Сумма долга и что?        (#section-2-body)   — Долг, Кредиторы, Несписываемый
+ *   3. Платежи / просрочки?        (#section-3-body)   — Просрочки, ФССП, Удержания
+ *   4. Работаете официально?      (#section-4-body)   — Доходы, Зарпкарта, КМ-невыгодно
+ *   5. Ипотека и залог               (#section-5-body)   — Ипотека → блок; Залог → блок
+ *   6. Имущество и сделки           (#section-6-body)   — Имущество → репитер; Сделки → блок
+ *   7. Семейное положение          (#section-7-body)   — Брак, Дети, Совместн.имущество → блок
+ *   8. Фирмы и юрлица              (#section-8-body)   — ООО → блок; ИП
+ *   9. Прочие обстоятельства      (#section-9-body)   — За другого, АС, Судимость → блок
+ *  10. Запись                      (#section-10-body)  — Канал, Комментарий
+ *      Бронирование               (#booking-body)     — рендерит booking.js
+ *  Заметки менеджера           (#manager-body)
+ *  Итог по разговору          (#target-status-badge, #verdict-reasons)
  */
 
 require_once __DIR__ . '/config.php';
@@ -175,69 +184,98 @@ $currentUser = [
       </div>
 
       <form id="anketa-form" class="hidden flex-col flex-1 w-full overflow-y-auto overflow-x-hidden" novalidate>
-        <div class="flex flex-col gap-3 px-4 py-3 w-full">
+        <div class="flex flex-col gap-5 px-4 py-3 w-full">
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">1</span>
-              <span class="text-xs font-semibold text-gray-700">Персональные</span>
-            </div>
-            <div id="personal-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- Поле города (отдельно — влияет на TZ расписания) -->
+          <div id="city-field-body" class="bg-white border border-gray-200 rounded-lg shadow-sm p-5"></div>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">2</span>
-              <span class="text-xs font-semibold text-gray-700">Финансы</span>
-            </div>
-            <div id="finance-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- 1. Обращение -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">1. Как могу к вам обращаться?</h2>
+            <div id="section-1-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">3</span>
-              <span class="text-xs font-semibold text-gray-700">Кредитная</span>
-            </div>
-            <div id="credit-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- 2. Долг -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">2. Какая сумма долга и что за долг?</h2>
+            <div id="section-2-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">4</span>
-              <span class="text-xs font-semibold text-gray-700">Заметки</span>
-            </div>
-            <div id="manager-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- 3. Просрочки / приставы / удержания -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">3. Платите или есть просрочки?</h2>
+            <div id="section-3-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">5</span>
-              <span class="text-xs font-semibold text-gray-700">Признаки нецелевой</span>
-              <span id="target-status-badge"
-                    class="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800">
-                Не определено
-              </span>
-            </div>
-            <div id="netselevoi-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-            <div id="target-status-reasons"
-                 class="hidden px-3 py-2 border-t border-gray-100 bg-red-50 text-xs text-red-800">
-              <div class="font-semibold mb-1">Причины:</div>
-              <ul class="list-disc list-inside space-y-0.5"></ul>
-            </div>
-          </div>
+          <!-- 4. Доход и работа -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">4. Работаете официально? Какой доход?</h2>
+            <div id="section-4-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold shrink-0">6</span>
-              <span class="text-xs font-semibold text-gray-700">Запись</span>
+          <!-- 5. Ипотека и залоговое имущество -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">5. Ипотека и залоговое имущество</h2>
+            <div id="section-5-body"></div>
+          </section>
+
+          <!-- 6. Крупное имущество и сделки -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">6. Крупное имущество и сделки</h2>
+            <div id="section-6-body"></div>
+          </section>
+
+          <!-- 7. Семейное положение -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">7. Семейное положение</h2>
+            <div id="section-7-body"></div>
+          </section>
+
+          <!-- 8. Фирмы и юрлица -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">8. Фирмы и юрлица</h2>
+            <div id="section-8-body"></div>
+          </section>
+
+          <!-- 9. Прочие важные обстоятельства -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">9. Прочие важные обстоятельства</h2>
+            <div id="section-9-body"></div>
+          </section>
+
+          <!-- 10. Запись -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">10. Запись</h2>
+            <div id="section-10-body"></div>
+          </section>
+
+          <!-- Заметки менеджера (без номера — сквозной блок) -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">Заметки менеджера</h2>
+            <div id="manager-body"></div>
+          </section>
+
+          <!-- Итог по разговору -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">Итог по разговору</h2>
+            <div id="target-status-badge"
+                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg bg-yellow-100 text-yellow-800">
+              Статус: не определено
             </div>
-            <div id="booking-body" class="px-3 py-3 text-xs text-gray-400">
-              <span class="inline-flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                Выберите слот справа →
-              </span>
+            <div id="verdict-reasons" class="hidden mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
+              <p class="text-sm font-medium text-red-800 mb-1">Причины «нецелевой»:</p>
+              <ul id="verdict-reasons-list" class="list-disc list-inside text-sm text-red-700 space-y-0.5"></ul>
             </div>
-          </div>
+            <p class="mt-2 text-xs text-gray-500">Статус считается автоматически по стандарту и записывается в поле Битрикс24.</p>
+          </section>
+
+          <!-- Скрытые поля бронирования (заполняются booking.js при выборе слота) -->
+          <input type="hidden" id="f-bookedManagerCalId" name="f-bookedManagerCalId" value="">
+          <input type="hidden" id="f-bookedTimeMP" name="f-bookedTimeMP" value="">
+          <input type="hidden" id="f-bookedTimeClient" name="f-bookedTimeClient" value="">
+
+          <!-- Панель подтверждения бронирования (booking.js рендерит сюда UI после выбора слота) -->
+          <div id="booking-body"></div>
 
         </div>
       </form>
