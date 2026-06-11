@@ -67,6 +67,12 @@ $currentUser = [
     html, body { margin: 0; padding: 0; overflow: hidden; }
     #app { height: 100vh; overflow: hidden; }
     .panel-scroll { overflow-y: auto; }
+    /* Запрет автоматической корректировки позиции скролла браузером
+       при изменении DOM (Chrome scroll anchor adjustment).
+       Без этого клик на radio вызывал прыжок формы при изменении
+       блоков #verdict-reasons / #property-sum-note ниже viewport. */
+    #anketa-form { overflow-anchor: none; }
+    #anketa-form * { overflow-anchor: none; }
     .panel-scroll::-webkit-scrollbar { width: 4px; }
     .panel-scroll::-webkit-scrollbar-track { background: transparent; }
     .panel-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
