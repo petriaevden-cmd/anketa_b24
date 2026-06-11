@@ -382,11 +382,9 @@ export function initForm(lead) {
   setTimeout(function() {
     const btnAdd = document.getElementById('btn-add-property');
     if (btnAdd) btnAdd.addEventListener('click', function() {
-      var savedScroll = form ? form.scrollTop : 0;
       _addPropertyRow();
       updateProgress();
       updateTargetStatusWidget();
-      if (form) form.scrollTop = savedScroll;
     });
 
     // При первом выборе «Да» у radio property — автоматически добавляем первую строку (как в прототипе)
@@ -401,10 +399,8 @@ export function initForm(lead) {
     // Чекбокс «не учитывать авто» — пересчитываем сравнение
     const excludeCarEl = document.getElementById('f-exclude-car');
     if (excludeCarEl) excludeCarEl.addEventListener('change', function() {
-      var savedScroll = form ? form.scrollTop : 0;
       updateTargetStatusWidget();
       _refreshSumNotes();
-      if (form) form.scrollTop = savedScroll;
     });
   }, 0);
 
@@ -419,27 +415,14 @@ export function initForm(lead) {
   const form = document.getElementById('anketa-form');
   if (form) {
     form.addEventListener('input', function() {
-      var savedScroll = form.scrollTop;
       updateProgress();
       updateTargetStatusWidget();
-      form.scrollTop = savedScroll;
     });
     form.addEventListener('change', function() {
-      var savedScroll = form.scrollTop;
       updateProgress();
       updateTargetStatusWidget();
-      form.scrollTop = savedScroll;
     });
-    // fix: при фокусе на sr-only radio браузер делает scrollIntoView внутри
-    // контейнера #anketa-form — форма прыгает наверх. Запоминаем scrollTop
-    // до фокуса и сразу восстанавливаем через requestAnimationFrame —
-    // после того как браузер успел сдвинуть. change при этом не теряется.
-    form.addEventListener('focus', function(e) {
-      if (e.target && e.target.type === 'radio' && e.target.classList.contains('sr-only')) {
-        var savedScroll = form.scrollTop;
-        requestAnimationFrame(function() { form.scrollTop = savedScroll; });
-      }
-    }, true);
+
   }
 
   // ── Первичный расчёт статуса и прогресса ──────────────────────────────────
@@ -561,28 +544,19 @@ function _addPropertyRow() {
 
   const valueInput = row.querySelector('[data-prop-value]');
   valueInput.addEventListener('input', function () {
-    const formEl = document.getElementById('anketa-form');
-    const savedScroll = formEl ? formEl.scrollTop : 0;
     const digits = valueInput.value.replace(/\D/g, '');
     valueInput.dataset.raw = digits;
     valueInput.value = digits ? Number(digits).toLocaleString('ru-RU') : '';
     updateProgress();
     updateTargetStatusWidget();
-    if (formEl) formEl.scrollTop = savedScroll;
   });
   row.querySelector('[data-prop-type]').addEventListener('change', function () {
-    const formEl = document.getElementById('anketa-form');
-    const savedScroll = formEl ? formEl.scrollTop : 0;
     updateTargetStatusWidget();
-    if (formEl) formEl.scrollTop = savedScroll;
   });
   row.querySelector('[data-prop-remove]').addEventListener('click', function () {
-    const formEl = document.getElementById('anketa-form');
-    const savedScroll = formEl ? formEl.scrollTop : 0;
     row.remove();
     updateProgress();
     updateTargetStatusWidget();
-    if (formEl) formEl.scrollTop = savedScroll;
   });
 }
 
