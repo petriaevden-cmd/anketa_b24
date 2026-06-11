@@ -24,8 +24,38 @@
 
 require_once __DIR__ . '/config.php';
 
-$portalHost  = htmlspecialchars(parse_url(PORTAL_URL, PHP_URL_HOST), ENT_QUOTES);
-$portalUrl   = rtrim((string) PORTAL_URL, '/');
+// ─── Определение реального портала по параметру DOMAIN ───────────────────────
+//
+// Приложение — локальное (local) приложение Битрикс24, которое хостится на
+// ТРЕТЬЕМ домене (apcheit.ru) и открывается порталом в iframe по адресу вида
+//   https://apcheit.ru/yurclick/anketa-kc/index.php?DOMAIN=crm.yurclick.com&PROTOCOL=1&...&APP_SID=...
+// Битрикс24 кладёт реальный хост портала в $_GET['DOMAIN'].
+//
+// Проблема: config.php выбирает PORTAL_URL/APP_ENV/WEBHOOK_URL по HTTP_HOST.
+// На apcheit.ru HTTP_HOST === 'apcheit.ru', а не портал → host-логика дала бы
+// dev, и applayout.js подключился бы НЕ с того портала. Поэтому, если Битрикс
+// передал DOMAIN из белого списка, переопределяем портал/окружение по нему.
+//
+// Белый список — только публичные хосты порталов (не секрет). WEBHOOK_URL
+// остаётся за config.php (там лежит секретный ключ; см. отчёт — там же diff,
+// чтобы и вебхук выбирался по DOMAIN на сервере).
+$DOMAIN_PORTAL_MAP = [
+    'crm.yurclick.com' => ['url' => 'https://crm.yurclick.com', 'env' => 'prod'],
+    'dev.yurclick.com' => ['url' => 'https://dev.yurclick.com', 'env' => 'dev'],
+];
+
+$reqDomain = isset($_GET['DOMAIN']) ? strtolower(trim((string) $_GET['DOMAIN'])) : '';
+if ($reqDomain !== '' && isset($DOMAIN_PORTAL_MAP[$reqDomain])) {
+    // DOMAIN из доверенного списка → портал и окружение берём из него.
+    $portalUrl = $DOMAIN_PORTAL_MAP[$reqDomain]['url'];
+    $appEnv    = $DOMAIN_PORTAL_MAP[$reqDomain]['env'];
+} else {
+    // DOMAIN не передан или неизвестен → фолбэк на значения из config.php.
+    $portalUrl = rtrim((string) PORTAL_URL, '/');
+    $appEnv    = (string) APP_ENV;
+}
+$portalHost = htmlspecialchars(parse_url($portalUrl, PHP_URL_HOST) ?: '', ENT_QUOTES);
+
 $salesDeptId  = (int) SALES_DEPT_ID;
 $bpTemplateId = (int) BP_TEMPLATE_ID;
 $slotMin     = (int) SLOT_DURATION_MIN;
@@ -45,6 +75,25 @@ $currentUser = [
     'LAST_NAME' => (string)($_REQUEST['USER_LAST_NAME'] ?? ''),
     'EMAIL'     => (string)($_REQUEST['USER_EMAIL']  ?? ''),
 ];
+
+// ─── URL файла логов (logs.txt) ──────────────────────────────────────────────
+//
+// Баг: в iframe на apcheit.ru ссылка «логи» вела на сам index.php с query
+// (?DOMAIN=...&APP_SID=...#). Причина — пустой logUrl + href="#": браузер шёл
+// на «#» относительно текущего URL iframe (а тот с GET-параметрами).
+//
+// Чиним детерминированно: строим путь к logs.txt от пути СКРИПТА (без query),
+// рядом с index.php/logger.php. SCRIPT_NAME query не содержит; на всякий случай
+// дополнительно отрезаем всё после '?'. Если хост не пришёл — фолбэк на
+// относительный путь (тот же каталог), который не зависит от GET-параметров.
+$logScriptPath = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
+$logScriptPath = strtok($logScriptPath, '?');           // отрезаем query, если вдруг есть
+$logDir        = rtrim(str_replace('\\', '/', dirname($logScriptPath)), '/'); // .../anketa-kc
+$logHost       = (string) ($_SERVER['HTTP_HOST'] ?? '');
+$logScheme     = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+$logUrl        = $logHost !== ''
+    ? $logScheme . '://' . $logHost . $logDir . '/logs.txt'  // абсолютный, без query
+    : $logDir . '/logs.txt';                                 // относительный фолбэк
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -87,7 +136,7 @@ $currentUser = [
     window.APP_CONFIG = {
       salesDeptId:   <?= $salesDeptId ?>,
       bpTemplateId:  <?= $bpTemplateId ?>,
-      appEnv:        <?= json_encode(APP_ENV) ?>,
+      appEnv:        <?= json_encode($appEnv) ?>,
       slotMin:      <?= $slotMin ?>,
       horizonDays:  <?= $horizonDays ?>,
       // Баг 11 fix: pollingMs удалён — автообновление отключено, только ручное.
@@ -100,8 +149,9 @@ $currentUser = [
       // В dev-режиме (webhook-shim) используется как MOCK_CURRENT_USER.
       // В iframe-режиме не используется — BX24 SDK возвращает реального юзера сам.
       currentUser:  <?= json_encode($currentUser, JSON_UNESCAPED_UNICODE) ?>,
-      // URL файла лога — используется для ссылки в шапке и в logger-client.js.
-      logUrl: '<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') ?>/logs.txt'
+      // URL файла лога — используется для ссылки в шапке. Строится от пути
+      // скрипта без query (см. $logUrl выше), чтобы не подхватывать ?DOMAIN/?APP_SID.
+      logUrl: <?= json_encode($logUrl) ?>
     };
   </script>
 
@@ -170,7 +220,7 @@ $currentUser = [
        rel="noopener noreferrer"
        class="font-bold text-gray-900 text-sm tracking-tight no-underline hover:underline hover:text-blue-600 transition-colors cursor-default hover:cursor-pointer"
        title="Открыть лог-файл"
-       onclick="if(window.APP_CONFIG&&window.APP_CONFIG.logUrl){this.href=window.APP_CONFIG.logUrl;}return true;">Анкета</a>
+       onclick="var u=window.APP_CONFIG&&window.APP_CONFIG.logUrl;if(u){this.href=u;return true;}event.preventDefault();return false;">Анкета</a>
     <div class="w-px h-4 bg-gray-200"></div>
     <div id="lead-title" class="text-xs text-gray-500 truncate">Лид — загрузка...</div>
     <div class="ml-auto flex items-center gap-2 text-xs text-gray-400">
