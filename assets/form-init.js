@@ -382,9 +382,11 @@ export function initForm(lead) {
   setTimeout(function() {
     const btnAdd = document.getElementById('btn-add-property');
     if (btnAdd) btnAdd.addEventListener('click', function() {
+      var savedScroll = form ? form.scrollTop : 0;
       _addPropertyRow();
       updateProgress();
       updateTargetStatusWidget();
+      if (form) form.scrollTop = savedScroll;
     });
 
     // При первом выборе «Да» у radio property — автоматически добавляем первую строку (как в прототипе)
@@ -399,8 +401,10 @@ export function initForm(lead) {
     // Чекбокс «не учитывать авто» — пересчитываем сравнение
     const excludeCarEl = document.getElementById('f-exclude-car');
     if (excludeCarEl) excludeCarEl.addEventListener('change', function() {
+      var savedScroll = form ? form.scrollTop : 0;
       updateTargetStatusWidget();
       _refreshSumNotes();
+      if (form) form.scrollTop = savedScroll;
     });
   }, 0);
 
@@ -408,15 +412,23 @@ export function initForm(lead) {
   // КРИТИЧНО: навешиваем ЗДЕСЬ, внутри initForm(), а НЕ на уровне модуля.
   // Это предотвращает краш: обработчики регистрируются только после полного
   // рендера HTML и инициализации всех зависимостей.
+  //
+  // ВАЖНО: перед любым изменением DOM сохраняем scrollTop формы и
+  // восстанавливаем его после — иначе браузер прокручивает форму вниз
+  // при изменении содержимого (verdict-reasons, sum-notes и т.д.).
   const form = document.getElementById('anketa-form');
   if (form) {
     form.addEventListener('input', function() {
+      var savedScroll = form.scrollTop;
       updateProgress();
       updateTargetStatusWidget();
+      form.scrollTop = savedScroll;
     });
     form.addEventListener('change', function() {
+      var savedScroll = form.scrollTop;
       updateProgress();
       updateTargetStatusWidget();
+      form.scrollTop = savedScroll;
     });
   }
 
@@ -539,19 +551,28 @@ function _addPropertyRow() {
 
   const valueInput = row.querySelector('[data-prop-value]');
   valueInput.addEventListener('input', function () {
+    const formEl = document.getElementById('anketa-form');
+    const savedScroll = formEl ? formEl.scrollTop : 0;
     const digits = valueInput.value.replace(/\D/g, '');
     valueInput.dataset.raw = digits;
     valueInput.value = digits ? Number(digits).toLocaleString('ru-RU') : '';
     updateProgress();
     updateTargetStatusWidget();
+    if (formEl) formEl.scrollTop = savedScroll;
   });
   row.querySelector('[data-prop-type]').addEventListener('change', function () {
+    const formEl = document.getElementById('anketa-form');
+    const savedScroll = formEl ? formEl.scrollTop : 0;
     updateTargetStatusWidget();
+    if (formEl) formEl.scrollTop = savedScroll;
   });
   row.querySelector('[data-prop-remove]').addEventListener('click', function () {
+    const formEl = document.getElementById('anketa-form');
+    const savedScroll = formEl ? formEl.scrollTop : 0;
     row.remove();
     updateProgress();
     updateTargetStatusWidget();
+    if (formEl) formEl.scrollTop = savedScroll;
   });
 }
 
