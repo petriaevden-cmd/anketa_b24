@@ -18,11 +18,13 @@ function wrap(d,e){return{data:function(){return d;},error:function(){return e||
 window.BX24={init:function(cb){setTimeout(cb,0);},placement:{info:function(){return{placement:"CRM_LEAD_DETAIL_TAB",options:{ID:12826}};}},callMethod:function(m,p,cb){var d={};if(m==="crm.lead.get")d=MOCK_LEAD;else if(m==="user.current")d=MOCK_USER;else if(m==="user.get")d=[MOCK_USER];else if(m==="department.get")d=[];setTimeout(function(){cb&&cb(wrap(d));},0);return true;},callBatch:function(c,cb){var o={};Object.keys(c).forEach(function(k){var m=c[k][0];if(m==="crm.lead.get")o[k]=wrap(MOCK_LEAD);else if(m==="user.current")o[k]=wrap(MOCK_USER);else o[k]=wrap([]);});setTimeout(function(){cb&&cb(o);},0);return true;},callBind:function(){return true;},callUnbind:function(){return true;},installFinish:function(){},getAuth:function(){return null;}};
 </script>`;
 
-// Strip the PHP-generated APP_CONFIG block, the isInsideBitrix <?php ?> block,
-// the APP_USE_WEBHOOK inline, and the webhook-client include; inject the stub.
+// Strip the PHP-generated APP_CONFIG block, the mode-selection script (iframe
+// detection + SDK injection), and the webhook-client include; inject the stub.
 s = s.replace(/<script>\s*\n\s*window\.APP_CONFIG[\s\S]*?<\/script>/, '');
+// Mode-selection <script> sets window.APP_USE_WEBHOOK and (in iframe) document.writes
+// the BX24 SDK. Remove the whole block — the stub provides BX24 + APP_USE_WEBHOOK=false.
+s = s.replace(/<script>\s*\n\s*\/\/ Вне iframe[\s\S]*?<\/script>/, '');
 s = s.replace(/<\?php[\s\S]*?\?>/g, '');
-s = s.replace(/<script>\s*\n\s*\/\/ Автоопределение режима[\s\S]*?<\/script>/, '');
 s = s.replace(/<script src="assets\/webhook-client\.js"><\/script>/, '');
 s = s.replace(/<script src="assets\/tz-utils\.js"><\/script>/, STUB + '\n<script src="assets/tz-utils.js"></script>');
 s = s.replace(/<script type="text\/javascript">\s*\(function\(m,e,t,r,i,k,a\)[\s\S]*?<\/noscript>/, '<!-- metrika removed for test -->');

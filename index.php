@@ -25,6 +25,7 @@
 require_once __DIR__ . '/config.php';
 
 $portalHost  = htmlspecialchars(parse_url(PORTAL_URL, PHP_URL_HOST), ENT_QUOTES);
+$portalUrl   = rtrim((string) PORTAL_URL, '/');
 $salesDeptId  = (int) SALES_DEPT_ID;
 $bpTemplateId = (int) BP_TEMPLATE_ID;
 $slotMin     = (int) SLOT_DURATION_MIN;
@@ -53,10 +54,10 @@ $currentUser = [
   <title>Анкета</title>
 
   <!--
-    BX24 JS SDK подключается самим Битрикс24 при загрузке iframe-плейсмента:
-    портал оборачивает наш контент и выдаёт window.BX24 с реальным
-    OAuth-токеном. Ручное подключение SDK не требуется.
-    При прямом открытии (dev/QA) BX24 подменяется shim'ом из assets/webhook-client.js.
+    BX24 JS SDK НЕ подключается Битрикс24 автоматически — мы делаем это сами
+    ниже, в блоке «ВЫБОР РЕЖИМА»: внутри iframe грузим applayout.js с портала
+    (коробка) с фолбэком на облачный CDN; вне iframe вместо SDK включается
+    shim из assets/webhook-client.js. См. подробности там же.
   -->
 
   <script src="https://cdn.tailwindcss.com"></script>
@@ -105,40 +106,57 @@ $currentUser = [
   </script>
 
   <!--
-    === WEBHOOK MODE (автоопределение) ===
+    === ВЫБОР РЕЖИМА: BX24 SDK (в iframe) или webhook-shim (вне iframe) ===
 
-    Логика выбора режима:
+    Определяем по `window.self === window.top`:
 
-    1. Если приложение открыто внутри ифрейма Битрикс24 (были переданы
-       параметры DOMAIN и APP_SID — они приходят только от самого
-       Битрикс24), используем реальный BX24 SDK. Тогда:
+    1. ВНУТРИ iframe Битрикс24 (self !== top) → используем реальный BX24 SDK.
+       Сам SDK НЕ грузится Битриксом автоматически — его нужно подключить.
+       Для коробочного портала корректный путь — applayout.js с самого
+       портала: PORTAL_URL + '/bitrix/js/rest/applayout.js'. Если он почему-то
+       не отдастся (старая версия / облако), есть fallback на облачный CDN
+       //api.bitrix24.com/api/v1/. Тогда:
          - placement.info() вернёт ID реального текущего лида,
-         - user.current вернёт реального пользователя, открывшего приложение,
+         - user.current вернёт реального пользователя,
          - вызовы API идут от имени текущего юзера через OAuth.
 
-    2. Если приложение открыто напрямую (dev/отладка вне ифрейма) —
-       включаем webhook-shim. Сам вебхук-клиент берёт leadId из
-       URL-параметров ?clientID / ?leadId.
+    2. ВНЕ iframe (self === top) — страница открыта напрямую по ссылке
+       (например, кнопка в карточке лида с ?leadId=...). BX24 SDK там не
+       работает, поэтому включаем webhook-shim. Он берёт leadId из
+       URL-параметров ?clientID / ?leadId и ходит в REST через вебхук.
 
-    Раньше флаг был жёстко прибит к true, из-за чего в карточке лида всегда
-    показывался mock-лид (или дефолт 59466) и mock-юзер «Тестовый Пользователь».
+    ВАЖНО: режим определяется на клиенте по iframe, а НЕ по APP_ENV. Это
+    позволяет открывать прод-страницу напрямую (вне iframe) и всё равно
+    получить рабочий шим. APP_ENV/WEBHOOK_URL из config.php лишь выбирают,
+    в какой портал ходит вебхук.
+
+    SDK подключается синхронно (document.write) ТОЛЬКО в iframe-режиме, чтобы
+    не конфликтовать с шимом: webhook-client.js ставит window.BX24 лишь когда
+    window.APP_USE_WEBHOOK === true.
   -->
-  <?php
-    // Серверное определение: приложение запущено внутри Битрикс24,
-    // если переданы параметры DOMAIN и APP_SID — их подкладывает
-    // сам портал при загрузке iframe плейсмента.
-    $isInsideBitrix = !empty($_REQUEST['DOMAIN']) && !empty($_REQUEST['APP_SID']);
-    // Инвертируем: webhook-режим нужен только когда мы НЕ внутри Битрикс24.
-    $useWebhook = $isInsideBitrix ? 'false' : 'true';
-  ?>
   <script>
-    // Автоопределение режима. Значение подставляется сервером как литерал true/false.
-    window.APP_USE_WEBHOOK = <?= $useWebhook ?>;
+    // Вне iframe (self === top) → webhook-shim; внутри iframe → BX24 SDK.
+    window.APP_USE_WEBHOOK = (window.self === window.top);
+
+    if (!window.APP_USE_WEBHOOK) {
+      // iframe-режим: синхронно подключаем BX24 SDK ДО webhook-client.js/app.js.
+      // Сначала applayout.js с самого портала (коробка), затем — облачный fallback.
+      var __portalUrl = <?= json_encode($portalUrl) ?>;
+      var __sdkSrc = (__portalUrl ? __portalUrl + '/bitrix/js/rest/applayout.js'
+                                  : '//api.bitrix24.com/api/v1/');
+      document.write('<script src="' + __sdkSrc + '"><\/script>');
+      // Fallback на облачный CDN, если портальный applayout.js не определил BX24.
+      document.write(
+        '<script>if(!window.BX24){document.write(' +
+        '\'<scr\' + \'ipt src="//api.bitrix24.com/api/v1/"><\\/scr\' + \'ipt>\'' +
+        ');}<\/script>'
+      );
+    }
   </script>
   <!-- tz-utils.js должен загружаться ДО webhook-client.js -->
   <script src="assets/tz-utils.js"></script>
   <script src="assets/webhook-client.js"></script>
-  <!-- === END: WEBHOOK MODE === -->
+  <!-- === END: ВЫБОР РЕЖИМА === -->
 </head>
 
 <body class="bg-gray-100 text-gray-800 text-sm antialiased">
