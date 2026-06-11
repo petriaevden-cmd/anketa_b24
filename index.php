@@ -73,6 +73,8 @@ $currentUser = [
        блоков #verdict-reasons / #property-sum-note ниже viewport. */
     #anketa-form { overflow-anchor: none; }
     #anketa-form * { overflow-anchor: none; }
+    /* fix: sr-only radio вырваны из потока — браузер не скроллит к ним при фокусе */
+    #anketa-form input[type="radio"].sr-only { position: fixed !important; }
     .panel-scroll::-webkit-scrollbar { width: 4px; }
     .panel-scroll::-webkit-scrollbar-track { background: transparent; }
     .panel-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }

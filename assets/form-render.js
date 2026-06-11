@@ -211,11 +211,11 @@ export function fieldRadio(name, label, currentVal, opts) {
       <span class="block mb-2 ${labelCls}">${label}</span>
       <div class="flex gap-2">
         <label class="flex-1">
-          <input type="radio" name="${escHtml(name)}" value="Y" ${yesChecked} ${toggleAttr} tabindex="-1" onfocus="this.blur()" class="sr-only peer">
+          <input type="radio" name="${escHtml(name)}" value="Y" ${yesChecked} ${toggleAttr} class="sr-only peer">
           <span class="flex items-center justify-center w-full ${pad} text-sm rounded-lg border border-gray-300 cursor-pointer ${yesCheckedCls} dark:border-gray-600">Да</span>
         </label>
         <label class="flex-1">
-          <input type="radio" name="${escHtml(name)}" value="N" ${noChecked} ${toggleAttr} tabindex="-1" onfocus="this.blur()" class="sr-only peer">
+          <input type="radio" name="${escHtml(name)}" value="N" ${noChecked} ${toggleAttr} class="sr-only peer">
           <span class="flex items-center justify-center w-full ${pad} text-sm rounded-lg border border-gray-300 cursor-pointer ${noCheckedCls} dark:border-gray-600">Нет</span>
         </label>
       </div>
