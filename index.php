@@ -60,7 +60,7 @@ $currentUser = [
     При прямом открытии (dev/QA) BX24 подменяется shim'ом из assets/webhook-client.js.
   -->
 
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" />
 
   <style>
