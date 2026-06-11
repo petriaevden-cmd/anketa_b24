@@ -6,3 +6,4 @@ node_modules/
 package-lock.json
 package.json
 harness.test.html
+test/shot_*.png

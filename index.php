@@ -164,7 +164,7 @@ $currentUser = [
 
   <div class="flex flex-1 overflow-hidden">
 
-    <div class="flex flex-col border-r border-gray-200 bg-gray-50" style="width:55%;min-width:300px;">
+    <div class="flex flex-col border-r border-gray-200 bg-gray-50" style="width:40%;min-width:340px;">
 
       <div class="bg-white border-b border-gray-100 px-4 py-2 shrink-0">
         <div class="flex items-center justify-between mb-1">
