@@ -7,6 +7,10 @@
  * Скрытые уточняющие блоки работают через data-toggle (attachToggles).
  *
  * Зависит от form-render.js и target-status.js (window.TargetStatus).
+ *
+ * ВАЖНО: НЕТ импортов из form-submit.js — циклический импорт устранён.
+ * updateTargetStatusWidget() использует локальный _collectFormLocal(),
+ * который дублирует только поля, нужные для evaluateTargetStatus().
  */
 
 import {
@@ -14,7 +18,7 @@ import {
   fieldCheckbox, fieldRadio, fieldCity, escHtml, attachMoneyMask,
   OPTS_SALARY_CARD, OPTS_MARITAL, OPTS_CHILDREN, OPTS_CHANNEL
 } from './form-render.js';
-import { collectFormData, clearCityError } from './form-submit.js';
+import { clearCityError } from './form-submit.js';
 import { setClientCity } from './slots.js';
 
 // ─── Утилиты ─────────────────────────────────────────────────────────────────
@@ -32,6 +36,90 @@ function _ynFromBx(val) {
   const n = parseInt(val, 10);
   if (!isNaN(n)) return n % 2 !== 0 ? 'Y' : 'N';
   return '';
+}
+
+// ─── Локальный сбор данных (без импорта из form-submit.js) ───────────────────
+
+/**
+ * _collectFormLocal — собирает ТОЛЬКО поля, нужные для evaluateTargetStatus().
+ * Это локальная копия логики из collectFormData(), без зависимости на form-submit.js.
+ * Разрывает циклический импорт: form-init.js ↔ form-submit.js.
+ */
+function _collectFormLocal() {
+  function vr(name) {
+    const el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : '';
+  }
+  function vMoney(id) {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    if (typeof el.dataset.raw === 'string' && el.dataset.raw !== '') return el.dataset.raw;
+    return String(el.value || '').replace(/\D+/g, '');
+  }
+
+  const mortgageHasGuarantor = vr('mortgageHasGuarantor');
+  const debt = parseInt(vMoney('f-debt-total') || '0', 10) || 0;
+
+  // Список имущества и сравнение с долгом
+  const rows = document.querySelectorAll('#property-list .property-row');
+  const excludeCar = (document.getElementById('f-exclude-car') || {}).checked;
+  let propertySum = 0;
+  rows.forEach(function(row) {
+    const typeEl = row.querySelector('[data-prop-type]');
+    const valEl  = row.querySelector('[data-prop-value]');
+    if (typeEl && valEl) {
+      if (excludeCar && typeEl.value === 'car') return;
+      propertySum += parseInt((valEl.dataset && valEl.dataset.raw) || '0', 10) || 0;
+    }
+  });
+
+  // Совместное имущество
+  const jointValueEl = document.getElementById('f-joint-value');
+  const jointValue = jointValueEl
+    ? (parseInt((jointValueEl.dataset && jointValueEl.dataset.raw) || jointValueEl.value || '0', 10) || 0)
+    : 0;
+
+  const f = {
+    debtTotal:              vMoney('f-debt-total'),
+    nonDischargeable:       vr('nonDischargeable'),
+    fssp:                   vr('fssp'),
+    deposit:                vr('deposit'),
+    incomeKmBad:            vr('incomeKmBad'),
+    mortgage:               vr('mortgage'),
+    mortgageHasGuarantor:   mortgageHasGuarantor,
+    mortgageBadOverdue:     vr('mortgageBadOverdue'),
+    collateral:             vr('collateral'),
+    collateralReadyToPart:  vr('collateralReadyToPart'),
+    property:               vr('property'),
+    propertySum:            propertySum,
+    propertyExcludeCar:     excludeCar,
+    propertyReadyForRisks:  vr('propertyReadyForRisks'),
+    deals:                  vr('deals'),
+    dealsDuringOverdue:     vr('dealsDuringOverdue'),
+    jointProperty:          vr('jointProperty'),
+    jointValue:             jointValue,
+    ooo:                    vr('ooo'),
+    ip:                     vr('ip'),
+    oooHasBalance:          vr('oooHasBalance'),
+    oooReadyToPart:         vr('oooReadyToPart'),
+    forOther:               vr('forOther'),
+    otherCompanyAS:         vr('otherCompanyAS'),
+    criminal:               vr('criminal'),
+    criminal159SameGrounds: vr('criminal159SameGrounds')
+  };
+
+  // Инверсия: правило «ипотека» ждёт mortgageNoGuarantor
+  f.mortgageNoGuarantor = (mortgageHasGuarantor === 'N') ? 'Y' : (mortgageHasGuarantor === 'Y' ? 'N' : '');
+
+  // Автоматические признаки сравнения имущества с долгом
+  f.propertyOverDebt = (debt > 0 && propertySum > debt) ? 'Y' : 'N';
+
+  const jointShare = jointValue / 2;
+  f.jointShare = jointShare;
+  const _isYes = function(v) { return v === 'Y' || v === true || v === 1 || v === '1'; };
+  f.jointOverDebt = (_isYes(f.jointProperty) && debt > 0 && jointShare > debt) ? 'Y' : 'N';
+
+  return f;
 }
 
 // ─── Инициализация формы ─────────────────────────────────────────────────────
@@ -133,7 +221,7 @@ export function initForm(lead) {
           { small: true, noRed: true, labelClass: 'text-sm text-gray-600 dark:text-gray-400' }) +
       `</div>`;
 
-    // Примечание: для залога отдельного UF-поля в ТК НЕТ — не читаем UF_DEPOSIT (это удержания, другое поле).
+    // Примечание: для залога отдельного UF-поля в ТК НЕТ — не читаем UF_DEPOSIT (это удержания, другое поле).
     // Значение radio collateral будет пустым при загрузке лида.
   }
 
@@ -175,32 +263,6 @@ export function initForm(lead) {
         fieldRadio('dealsDuringOverdue', 'Сделки были в период просрочек по долгам?', '',
           { small: true, yesRed: true, labelClass: 'text-sm text-gray-600 dark:text-gray-400' }) +
       `</div>`;
-
-    // Вешаем обработчик на кнопку «Добавить имущество» после рендера
-    setTimeout(function() {
-      const btnAdd = document.getElementById('btn-add-property');
-      if (btnAdd) btnAdd.addEventListener('click', function() {
-        _addPropertyRow();
-        updateProgress();
-        updateTargetStatusWidget();
-      });
-
-      // При первом выборе «Да» у radio property — автоматически добавляем первую строку (как в прототипе)
-      document.querySelectorAll('input[name="property"][value="Y"]').forEach(function(radio) {
-        radio.addEventListener('change', function() {
-          if (radio.checked && document.querySelectorAll('#property-list .property-row').length === 0) {
-            _addPropertyRow();
-          }
-        });
-      });
-
-      // Чекбокс «не учитывать авто» — пересчитываем сравнение
-      const excludeCarEl = document.getElementById('f-exclude-car');
-      if (excludeCarEl) excludeCarEl.addEventListener('change', function() {
-        updateTargetStatusWidget();
-        _refreshSumNotes();
-      });
-    }, 0);
   }
 
   // ── БЛОК 7: Семейное положение ────────────────────────────────────────────
@@ -316,6 +378,48 @@ export function initForm(lead) {
   // ── Навешиваем toggle-обработчики на все data-toggle radio-кнопки ──────────
   attachToggles();
 
+  // ── Обработчики кнопки «Добавить имущество» и авто-строка ─────────────────
+  setTimeout(function() {
+    const btnAdd = document.getElementById('btn-add-property');
+    if (btnAdd) btnAdd.addEventListener('click', function() {
+      _addPropertyRow();
+      updateProgress();
+      updateTargetStatusWidget();
+    });
+
+    // При первом выборе «Да» у radio property — автоматически добавляем первую строку (как в прототипе)
+    document.querySelectorAll('input[name="property"][value="Y"]').forEach(function(radio) {
+      radio.addEventListener('change', function() {
+        if (radio.checked && document.querySelectorAll('#property-list .property-row').length === 0) {
+          _addPropertyRow();
+        }
+      });
+    });
+
+    // Чекбокс «не учитывать авто» — пересчитываем сравнение
+    const excludeCarEl = document.getElementById('f-exclude-car');
+    if (excludeCarEl) excludeCarEl.addEventListener('change', function() {
+      updateTargetStatusWidget();
+      _refreshSumNotes();
+    });
+  }, 0);
+
+  // ── Обработчики формы: прогресс + статус при любом изменении ─────────────
+  // КРИТИЧНО: навешиваем ЗДЕСЬ, внутри initForm(), а НЕ на уровне модуля.
+  // Это предотвращает краш: обработчики регистрируются только после полного
+  // рендера HTML и инициализации всех зависимостей.
+  const form = document.getElementById('anketa-form');
+  if (form) {
+    form.addEventListener('input', function() {
+      updateProgress();
+      updateTargetStatusWidget();
+    });
+    form.addEventListener('change', function() {
+      updateProgress();
+      updateTargetStatusWidget();
+    });
+  }
+
   // ── Первичный расчёт статуса и прогресса ──────────────────────────────────
   updateTargetStatusWidget();
   updateProgress();
@@ -330,16 +434,16 @@ function _toNumber(v) {
 }
 
 /**
- * _refreshSumNotes — обновляет цветные подсказки под репитером имущества
+ * _refreshSumNotes — обновляет цветные подсказки под репитером имущества
  * и под полем совместного имущества (аналог refreshSumNotes из прототипа).
  */
 export function _refreshSumNotes() {
   const debtEl = document.getElementById('f-debt-total');
   const debt = debtEl ? (_toNumber(debtEl.dataset.raw) || 0) : 0;
-  const fmt = function(n) { return Number(n).toLocaleString('ru-RU') + ' ₽'; };
+  const fmt = function(n) { return Number(n).toLocaleString('ru-RU') + ' ₽'; };
 
-  const NOTE_OVER = 'text-xs p-2.5 rounded-lg bg-red-100 text-red-800';
-  const NOTE_OK   = 'text-xs p-2.5 rounded-lg bg-green-100 text-green-800';
+  const NOTE_OVER = 'text-xs p-2.5 rounded-lg bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+  const NOTE_OK   = 'text-xs p-2.5 rounded-lg bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
 
   // 1. Доп. имущество
   const propNote = document.getElementById('property-sum-note');
@@ -358,13 +462,13 @@ export function _refreshSumNotes() {
         }
       });
       if (propSum > 0) {
-        const carHint = excludeCar ? ' (без авто)' : '';
+        const carHint = excludeCar ? ' (без авто)' : '';
         if (debt <= 0) {
           propNote.className = NOTE_OK;
-          propNote.textContent = 'Сумма доп. имущества' + carHint + ': ' + fmt(propSum) + '. Укажите сумму долга.';
+          propNote.textContent = 'Сумма доп. имущества' + carHint + ': ' + fmt(propSum) + '. Укажите сумму долга, чтобы сравнить.';
         } else if (propSum > debt) {
           propNote.className = NOTE_OVER;
-          propNote.textContent = 'Сумма доп. имущества' + carHint + ' ' + fmt(propSum) + ' больше долга ' + fmt(debt) + ' → нецелевой.';
+          propNote.textContent = 'Сумма доп. имущества' + carHint + ' ' + fmt(propSum) + ' больше долга ' + fmt(debt) + ' → статус нецелевой.';
         } else {
           propNote.className = NOTE_OK;
           propNote.textContent = 'Сумма доп. имущества' + carHint + ' ' + fmt(propSum) + ' не превышает долг ' + fmt(debt) + '.';
@@ -382,19 +486,19 @@ export function _refreshSumNotes() {
   const jointNote = document.getElementById('joint-sum-note');
   const jointRadio = document.querySelector('input[name="jointProperty"]:checked');
   const jointEl = document.getElementById('f-joint-value');
-  const jointValue = jointEl ? (_toNumber(jointEl.dataset.raw) || 0) : 0;
+  const jointValue = jointEl ? (_toNumber(jointEl.dataset.raw) || _toNumber(jointEl.value) || 0) : 0;
   if (jointNote) {
     if (jointRadio && jointRadio.value === 'Y' && jointValue > 0) {
       const share = jointValue / 2;
       if (debt <= 0) {
         jointNote.className = 'mt-2 ' + NOTE_OK;
-        jointNote.textContent = 'Совместное ' + fmt(jointValue) + ', доля ' + fmt(share) + '. Укажите долг.';
+        jointNote.textContent = 'Совместное имущество ' + fmt(jointValue) + ', доля клиента ' + fmt(share) + ' (половина). Укажите долг.';
       } else if (share > debt) {
         jointNote.className = 'mt-2 ' + NOTE_OVER;
-        jointNote.textContent = 'Доля ' + fmt(share) + ' (половина от ' + fmt(jointValue) + ') больше долга ' + fmt(debt) + ' → нецелевой.';
+        jointNote.textContent = 'Доля клиента ' + fmt(share) + ' (половина от ' + fmt(jointValue) + ') больше долга ' + fmt(debt) + ' → статус нецелевой.';
       } else {
         jointNote.className = 'mt-2 ' + NOTE_OK;
-        jointNote.textContent = 'Доля ' + fmt(share) + ' не превышает долг ' + fmt(debt) + '.';
+        jointNote.textContent = 'Доля клиента ' + fmt(share) + ' (половина от ' + fmt(jointValue) + ') не превышает долг ' + fmt(debt) + '.';
       }
       jointNote.classList.remove('hidden');
     } else {
@@ -479,39 +583,35 @@ export function updateProgress() {
   const form = document.getElementById('anketa-form');
   if (!form) return;
 
-  const inputs = form.querySelectorAll('input:not([readonly]):not([type="radio"]):not([type="checkbox"]),select,textarea');
+  // Считаем только видимые поля (как в прототипе — скрытые уточнения не давят на прогресс)
+  const texts = form.querySelectorAll('input[type="text"], select');
+  const radioGroups = {};
+  form.querySelectorAll('input[type="radio"]').forEach(function (r) {
+    if (r.closest('.hidden')) return; // скрытое уточнение не учитываем
+    radioGroups[r.name] = radioGroups[r.name] || false;
+    if (r.checked) radioGroups[r.name] = true;
+  });
+
+  let total = 0;
   let filled = 0;
-  inputs.forEach(function(el) {
+
+  texts.forEach(function (el) {
+    if (el.closest('.hidden')) return;
+    total++;
     if (el.value && el.value.trim() !== '') filled++;
   });
 
-  // Дополнительно считаем заполненные radio-группы
-  const radioGroups = {};
-  form.querySelectorAll('input[type="radio"]:checked').forEach(function(el) {
-    radioGroups[el.name] = true;
+  Object.keys(radioGroups).forEach(function (name) {
+    total++;
+    if (radioGroups[name]) filled++;
   });
-  const filledRadio = Object.keys(radioGroups).length;
 
-  const total = inputs.length + Object.keys(
-    (function() {
-      const groups = {};
-      form.querySelectorAll('input[type="radio"]').forEach(function(el) { groups[el.name] = true; });
-      return groups;
-    })()
-  ).length;
-  const totalFilled = filled + filledRadio;
-
-  const pct = total ? Math.round((totalFilled / total) * 100) : 0;
-
+  const percent = total ? Math.round((filled / total) * 100) : 0;
   const bar = document.getElementById('progress-bar');
   const lbl = document.getElementById('progress-label');
-  if (bar) bar.style.width = `${pct}%`;
-  if (lbl) lbl.textContent = `${totalFilled} / ${total}`;
+  if (bar) bar.style.width = percent + '%';
+  if (lbl) lbl.textContent = percent + '%';
 }
-
-document.addEventListener('change', function(e) {
-  if (e.target.closest('#anketa-form')) updateProgress();
-});
 
 // ─── Виджет статуса «Целевой/Нецелевой» ──────────────────────────────────────
 
@@ -521,7 +621,8 @@ export function updateTargetStatusWidget() {
     return;
   }
 
-  const formData = collectFormData();
+  // Используем локальный сбор данных — БЕЗ импорта из form-submit.js
+  const formData = _collectFormLocal();
   const status   = window.TargetStatus.evaluate(formData);
   window.__targetStatus = status;
 
@@ -563,10 +664,3 @@ export function updateTargetStatusWidget() {
     oldBadge.textContent = status.label;
   }
 }
-
-document.addEventListener('change', function (e) {
-  if (e.target.closest('#anketa-form')) updateTargetStatusWidget();
-});
-document.addEventListener('input', function (e) {
-  if (e.target.closest('#anketa-form')) updateTargetStatusWidget();
-});
