@@ -430,6 +430,16 @@ export function initForm(lead) {
       updateTargetStatusWidget();
       form.scrollTop = savedScroll;
     });
+    // fix: при фокусе на sr-only radio браузер делает scrollIntoView внутри
+    // контейнера #anketa-form — форма прыгает наверх. Запоминаем scrollTop
+    // до фокуса и сразу восстанавливаем через requestAnimationFrame —
+    // после того как браузер успел сдвинуть. change при этом не теряется.
+    form.addEventListener('focus', function(e) {
+      if (e.target && e.target.type === 'radio' && e.target.classList.contains('sr-only')) {
+        var savedScroll = form.scrollTop;
+        requestAnimationFrame(function() { form.scrollTop = savedScroll; });
+      }
+    }, true);
   }
 
   // ── Первичный расчёт статуса и прогресса ──────────────────────────────────
