@@ -212,11 +212,11 @@ export function fieldRadio(name, label, currentVal, opts) {
       <div class="flex gap-2">
         <label class="flex-1">
           <input type="radio" name="${escHtml(name)}" value="Y" ${yesChecked} ${toggleAttr} class="sr-only peer">
-          <span class="flex items-center justify-center w-full ${pad} text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 ${yesCheckedCls} dark:border-gray-600 dark:text-gray-300">Да</span>
+          <span class="flex items-center justify-center w-full ${pad} text-sm rounded-lg border border-gray-300 cursor-pointer ${yesCheckedCls} dark:border-gray-600">Да</span>
         </label>
         <label class="flex-1">
           <input type="radio" name="${escHtml(name)}" value="N" ${noChecked} ${toggleAttr} class="sr-only peer">
-          <span class="flex items-center justify-center w-full ${pad} text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 ${noCheckedCls} dark:border-gray-600 dark:text-gray-300">Нет</span>
+          <span class="flex items-center justify-center w-full ${pad} text-sm rounded-lg border border-gray-300 cursor-pointer ${noCheckedCls} dark:border-gray-600">Нет</span>
         </label>
       </div>
     </div>`;

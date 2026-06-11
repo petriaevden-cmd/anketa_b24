@@ -133,18 +133,8 @@ export function initForm(lead) {
           { small: true, noRed: true, labelClass: 'text-sm text-gray-600 dark:text-gray-400' }) +
       `</div>`;
 
-    // Восстанавливаем значение залога из CRM
-    const collateralVal = _ynFromBx(f.UF_DEPOSIT);
-    if (collateralVal) {
-      const collEl = sec5.querySelector(`input[name="collateral"][value="${collateralVal}"]`);
-      if (collEl) {
-        collEl.checked = true;
-        if (collateralVal === 'Y') {
-          const blk = document.getElementById('block-collateral');
-          if (blk) blk.classList.remove('hidden');
-        }
-      }
-    }
+    // Примечание: для залога отдельного UF-поля в ТК НЕТ — не читаем UF_DEPOSIT (это удержания, другое поле).
+    // Значение radio collateral будет пустым при загрузке лида.
   }
 
   // ── БЛОК 6: Крупное имущество и сделки ───────────────────────────────────
@@ -189,7 +179,27 @@ export function initForm(lead) {
     // Вешаем обработчик на кнопку «Добавить имущество» после рендера
     setTimeout(function() {
       const btnAdd = document.getElementById('btn-add-property');
-      if (btnAdd) btnAdd.addEventListener('click', _addPropertyRow);
+      if (btnAdd) btnAdd.addEventListener('click', function() {
+        _addPropertyRow();
+        updateProgress();
+        updateTargetStatusWidget();
+      });
+
+      // При первом выборе «Да» у radio property — автоматически добавляем первую строку (как в прототипе)
+      document.querySelectorAll('input[name="property"][value="Y"]').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+          if (radio.checked && document.querySelectorAll('#property-list .property-row').length === 0) {
+            _addPropertyRow();
+          }
+        });
+      });
+
+      // Чекбокс «не учитывать авто» — пересчитываем сравнение
+      const excludeCarEl = document.getElementById('f-exclude-car');
+      if (excludeCarEl) excludeCarEl.addEventListener('change', function() {
+        updateTargetStatusWidget();
+        _refreshSumNotes();
+      });
     }, 0);
   }
 
@@ -309,6 +319,88 @@ export function initForm(lead) {
   // ── Первичный расчёт статуса и прогресса ──────────────────────────────────
   updateTargetStatusWidget();
   updateProgress();
+}
+
+// ─── Подсказки-сравнения имущества vs долг (точная копия из прототипа) ───────────
+
+function _toNumber(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(/\D+/g, ''));
+  return isFinite(n) ? n : null;
+}
+
+/**
+ * _refreshSumNotes — обновляет цветные подсказки под репитером имущества
+ * и под полем совместного имущества (аналог refreshSumNotes из прототипа).
+ */
+export function _refreshSumNotes() {
+  const debtEl = document.getElementById('f-debt-total');
+  const debt = debtEl ? (_toNumber(debtEl.dataset.raw) || 0) : 0;
+  const fmt = function(n) { return Number(n).toLocaleString('ru-RU') + ' ₽'; };
+
+  const NOTE_OVER = 'text-xs p-2.5 rounded-lg bg-red-100 text-red-800';
+  const NOTE_OK   = 'text-xs p-2.5 rounded-lg bg-green-100 text-green-800';
+
+  // 1. Доп. имущество
+  const propNote = document.getElementById('property-sum-note');
+  const propRadio = document.querySelector('input[name="property"]:checked');
+  if (propNote) {
+    if (propRadio && propRadio.value === 'Y') {
+      const rows = document.querySelectorAll('#property-list .property-row');
+      const excludeCar = (document.getElementById('f-exclude-car') || {}).checked;
+      let propSum = 0;
+      rows.forEach(function(row) {
+        const typeEl = row.querySelector('[data-prop-type]');
+        const valEl  = row.querySelector('[data-prop-value]');
+        if (typeEl && valEl) {
+          if (excludeCar && typeEl.value === 'car') return;
+          propSum += parseInt((valEl.dataset && valEl.dataset.raw) || '0', 10) || 0;
+        }
+      });
+      if (propSum > 0) {
+        const carHint = excludeCar ? ' (без авто)' : '';
+        if (debt <= 0) {
+          propNote.className = NOTE_OK;
+          propNote.textContent = 'Сумма доп. имущества' + carHint + ': ' + fmt(propSum) + '. Укажите сумму долга.';
+        } else if (propSum > debt) {
+          propNote.className = NOTE_OVER;
+          propNote.textContent = 'Сумма доп. имущества' + carHint + ' ' + fmt(propSum) + ' больше долга ' + fmt(debt) + ' → нецелевой.';
+        } else {
+          propNote.className = NOTE_OK;
+          propNote.textContent = 'Сумма доп. имущества' + carHint + ' ' + fmt(propSum) + ' не превышает долг ' + fmt(debt) + '.';
+        }
+        propNote.classList.remove('hidden');
+      } else {
+        propNote.classList.add('hidden');
+      }
+    } else {
+      propNote.classList.add('hidden');
+    }
+  }
+
+  // 2. Совместное имущество
+  const jointNote = document.getElementById('joint-sum-note');
+  const jointRadio = document.querySelector('input[name="jointProperty"]:checked');
+  const jointEl = document.getElementById('f-joint-value');
+  const jointValue = jointEl ? (_toNumber(jointEl.dataset.raw) || 0) : 0;
+  if (jointNote) {
+    if (jointRadio && jointRadio.value === 'Y' && jointValue > 0) {
+      const share = jointValue / 2;
+      if (debt <= 0) {
+        jointNote.className = 'mt-2 ' + NOTE_OK;
+        jointNote.textContent = 'Совместное ' + fmt(jointValue) + ', доля ' + fmt(share) + '. Укажите долг.';
+      } else if (share > debt) {
+        jointNote.className = 'mt-2 ' + NOTE_OVER;
+        jointNote.textContent = 'Доля ' + fmt(share) + ' (половина от ' + fmt(jointValue) + ') больше долга ' + fmt(debt) + ' → нецелевой.';
+      } else {
+        jointNote.className = 'mt-2 ' + NOTE_OK;
+        jointNote.textContent = 'Доля ' + fmt(share) + ' не превышает долг ' + fmt(debt) + '.';
+      }
+      jointNote.classList.remove('hidden');
+    } else {
+      jointNote.classList.add('hidden');
+    }
+  }
 }
 
 // ─── Репитер имущества ───────────────────────────────────────────────────────
@@ -432,6 +524,9 @@ export function updateTargetStatusWidget() {
   const formData = collectFormData();
   const status   = window.TargetStatus.evaluate(formData);
   window.__targetStatus = status;
+
+  // Обновляем подсказки сравнения (как в прототипе)
+  _refreshSumNotes();
 
   // Обновляем бейдж в блоке «Итог»
   const badgeEl = document.getElementById('target-status-badge');
