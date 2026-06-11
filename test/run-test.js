@@ -42,6 +42,15 @@ function serve() {
 
   await page.goto(url, { waitUntil: 'networkidle' });
 
+  // NOFIX=1 neutralizes the fix to prove the regression reproduces: forces the
+  // sr-only radio label wrappers back to position:static (their containing
+  // block becomes the page ICB, restoring the window-level jump).
+  if (process.env.NOFIX === '1') {
+    await page.addStyleTag({ content:
+      '#anketa-form label:has(> input.sr-only){position:static !important}' });
+    console.log('[NOFIX mode] forced label wrappers to position:static');
+  }
+
   // Wait for the form to be rendered (section bodies filled by form-init.js).
   await page.waitForFunction(() => {
     const f = document.getElementById('anketa-form');
@@ -84,6 +93,10 @@ function serve() {
     ['fssp','Y'], ['deposit','Y'],
   ];
 
+  const winScroll = () => page.evaluate(() =>
+    Math.round(window.scrollY || document.scrollingElement.scrollTop || 0));
+  const scrollerTop = () => page.evaluate(() => Math.round(window.__scroller().scrollTop));
+
   const results = [];
   for (const [name, val] of targets) {
     const sel = `#anketa-form input[name="${name}"][value="${val}"]`;
@@ -98,20 +111,35 @@ function serve() {
       const r = label.getBoundingClientRect();
       const fr = sc.getBoundingClientRect();
       sc.scrollTop += (r.top - fr.top) - sc.clientHeight / 2;
+      window.scrollTo(0, 0); // reset any window-level scroll between trials
     }, sel);
     await page.waitForTimeout(60);
 
-    const before = await page.evaluate(() => window.__scroller().scrollTop);
-    // Click the visible label span (what a user actually clicks).
-    await page.evaluate((s) => {
-      const inp = document.querySelector(s);
-      const label = inp.closest('label');
-      (label.querySelector('span') || label).click();
-    }, sel);
-    await page.waitForTimeout(120);
-    const after = await page.evaluate(() => window.__scroller().scrollTop);
+    const beforeSc = await scrollerTop();
+    const beforeWin = await winScroll();
 
-    results.push({ name, val, before: Math.round(before), after: Math.round(after), delta: Math.round(after - before) });
+    // Real mouse click on the visible label span (faithfully drives the
+    // focus-into-view behavior that caused the window-level jump).
+    const box = await page.evaluate((s) => {
+      const inp = document.querySelector(s);
+      const span = inp.closest('label').querySelector('span') || inp.closest('label');
+      const r = span.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }, sel);
+    await page.mouse.click(box.x, box.y);
+    await page.waitForTimeout(120);
+
+    const afterSc = await scrollerTop();
+    const afterWin = await winScroll();
+    const checked = await page.evaluate((s) => document.querySelector(s).checked, sel);
+
+    results.push({
+      name, val,
+      dScroller: afterSc - beforeSc,
+      dWindow: afterWin - beforeWin,
+      winAfter: afterWin,
+      checked,
+    });
   }
 
   // Verify a conditional block expanded (mortgage Y -> block-mortgage visible).
@@ -133,15 +161,19 @@ function serve() {
 
   console.log('=== CONSOLE ERRORS ===');
   console.log(errors.length ? errors.join('\n') : '(none)');
-  console.log('\n=== CLICK SCROLL DELTAS ===');
-  let maxDelta = 0;
+  console.log('\n=== CLICK SCROLL DELTAS (scroller + window) ===');
+  let maxScroller = 0, maxWindow = 0, notChecked = 0;
   for (const r of results) {
     if (r.status === 'MISSING') { console.log(`${r.name}=${r.val}: MISSING`); continue; }
-    maxDelta = Math.max(maxDelta, Math.abs(r.delta));
-    const flag = Math.abs(r.delta) > 4 ? '  <-- JUMP' : '';
-    console.log(`${r.name}=${r.val}: before=${r.before} after=${r.after} delta=${r.delta}${flag}`);
+    maxScroller = Math.max(maxScroller, Math.abs(r.dScroller));
+    maxWindow = Math.max(maxWindow, Math.abs(r.dWindow));
+    if (!r.checked) notChecked++;
+    const flag = (Math.abs(r.dScroller) > 4 || Math.abs(r.dWindow) > 4) ? '  <-- JUMP' : '';
+    console.log(`${r.name}=${r.val}: dScroller=${r.dScroller} dWindow=${r.dWindow} (winAfter=${r.winAfter}) checked=${r.checked}${flag}`);
   }
-  console.log('\nMAX |delta| = ' + maxDelta + ' px');
+  console.log('\nMAX |dScroller| = ' + maxScroller + ' px');
+  console.log('MAX |dWindow|   = ' + maxWindow + ' px');
+  console.log('radios not checked after click: ' + notChecked);
   console.log('\n=== CONDITIONAL BLOCKS (true=visible) ===');
   console.log(JSON.stringify(condChecks, null, 0));
   console.log('\n=== STATUS BADGE ===');
@@ -150,6 +182,9 @@ function serve() {
   await browser.close();
   srv.close();
 
-  // Exit non-zero if any jump > 4px (allowing tiny sub-pixel rounding).
-  process.exit(maxDelta > 4 ? 1 : 0);
+  // Fail if either the scroller OR the window jumps > 4px, or a click didn't
+  // select the radio (regression in label↔input wiring).
+  const ok = maxScroller <= 4 && maxWindow <= 4 && notChecked === 0;
+  console.log('\nRESULT: ' + (ok ? 'PASS' : 'FAIL'));
+  process.exit(ok ? 0 : 1);
 })();

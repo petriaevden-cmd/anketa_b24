@@ -18,15 +18,20 @@ const before=await pg.evaluate(()=>document.getElementById("anketa-form").parent
 // forOther=Y is a stop-factor high in the form (section 9) -> changes verdict reasons
 await pg.evaluate(()=>{document.querySelector('input[name="forOther"][value="Y"]').closest('label').querySelector('span').click();});
 await pg.waitForTimeout(150);
-const after=await pg.evaluate(()=>document.getElementById("anketa-form").parentElement.scrollTop);
-console.log('bottom + stop-factor click: before='+Math.round(before)+' after='+Math.round(after)+' delta='+Math.round(after-before));
-// Now toggle several stop factors rapidly to grow/shrink verdict-reasons
+const after=await pg.evaluate(()=>document.getElementById("anketa-form").parentElement.scrollTop);const winAfter=await pg.evaluate(()=>Math.round(window.scrollY||0));
+console.log("bottom + stop-factor click: dScroller="+Math.round(after-before)+" dWindow="+winAfter);
+// Toggle more stop factors while at the bottom; assert WINDOW never moves
+// (the scroller may legitimately clamp scrollTop when content height shrinks).
+let maxWin=Math.abs(winAfter);
 for(const n of ['otherCompanyAS','incomeKmBad','nonDischargeable']){
-  const bb=await pg.evaluate(()=>document.getElementById("anketa-form").parentElement.scrollTop);
+  await pg.evaluate(()=>window.scrollTo(0,0));
   await pg.evaluate((nm)=>{const el=document.querySelector(`input[name="${nm}"][value="Y"]`);if(el)el.closest('label').querySelector('span').click();},n);
   await pg.waitForTimeout(120);
-  const aa=await pg.evaluate(()=>document.getElementById("anketa-form").parentElement.scrollTop);
-  console.log(`${n}=Y at bottom: delta=${Math.round(aa-bb)}`);
+  const w=await pg.evaluate(()=>Math.round(window.scrollY||0));
+  maxWin=Math.max(maxWin,Math.abs(w));
+  console.log(`${n}=Y at bottom: dWindow=${w}`);
 }
+console.log('\nMAX |dWindow| = '+maxWin+' px  RESULT: '+(maxWin<=4?'PASS':'FAIL'));
 await b.close();srv.close();
+process.exit(maxWin<=4?0:1);
 })();

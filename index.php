@@ -68,6 +68,16 @@ $currentUser = [
     #app { height: 100vh; overflow: hidden; }
     .panel-scroll { overflow-y: auto; }
 
+    /* Скрытые sr-only radio (position:absolute) должны иметь позиционированного
+       предка — иначе их containing block становится страница (ICB), used-позиция
+       уходит в координаты документа за пределы окна, и при фокусе браузер
+       скроллит viewport к этой «призрачной» точке (прыжок на уровне окна,
+       несмотря на body overflow:hidden). Делаем label-обёртку relative.
+       Класс relative также проставлен в form-render.js (fieldRadio); это
+       CSS-дублёр на случай sr-only без класса, не требует :has(). */
+    #anketa-form label:has(> input.sr-only),
+    .anketa-radio-label { position: relative; }
+
     .panel-scroll::-webkit-scrollbar { width: 4px; }
     .panel-scroll::-webkit-scrollbar-track { background: transparent; }
     .panel-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
