@@ -67,12 +67,6 @@ $currentUser = [
     html, body { margin: 0; padding: 0; overflow: hidden; }
     #app { height: 100vh; overflow: hidden; }
     .panel-scroll { overflow-y: auto; }
-    /* Запрет автоматической корректировки позиции скролла браузером
-       при изменении DOM (Chrome scroll anchor adjustment).
-       Без этого клик на radio вызывал прыжок формы при изменении
-       блоков #verdict-reasons / #property-sum-note ниже viewport. */
-    #anketa-form { overflow-anchor: none; }
-    #anketa-form * { overflow-anchor: none; }
 
     .panel-scroll::-webkit-scrollbar { width: 4px; }
     .panel-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -190,7 +184,14 @@ $currentUser = [
         </div>
       </div>
 
-      <form id="anketa-form" class="hidden flex-col flex-1 w-full overflow-y-auto overflow-x-hidden" novalidate>
+      <!--
+        Скролл-обёртка (как в прототипе): прокручивается именно ЭТОТ контейнер,
+        а сама <form> остаётся блоком в обычном потоке. Так браузеру нечего
+        «доводить в зону видимости» при фокусе скрытых sr-only radio — форма
+        не прыгает. overflow-anchor-хак больше не нужен.
+      -->
+      <div class="flex-1 w-full overflow-y-auto overflow-x-hidden">
+      <form id="anketa-form" class="hidden w-full" novalidate>
         <div class="flex flex-col gap-5 px-4 py-3 w-full">
 
           <!-- Поле города (отдельно — влияет на TZ расписания) -->
@@ -286,6 +287,7 @@ $currentUser = [
 
         </div>
       </form>
+      </div>
 
       <div class="bg-white border-t border-gray-200 px-4 py-2 flex items-center gap-2 shrink-0">
         <button id="btn-save" type="submit" form="anketa-form"

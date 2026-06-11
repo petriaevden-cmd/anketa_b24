@@ -408,10 +408,6 @@ export function initForm(lead) {
   // КРИТИЧНО: навешиваем ЗДЕСЬ, внутри initForm(), а НЕ на уровне модуля.
   // Это предотвращает краш: обработчики регистрируются только после полного
   // рендера HTML и инициализации всех зависимостей.
-  //
-  // ВАЖНО: перед любым изменением DOM сохраняем scrollTop формы и
-  // восстанавливаем его после — иначе браузер прокручивает форму вниз
-  // при изменении содержимого (verdict-reasons, sum-notes и т.д.).
   const form = document.getElementById('anketa-form');
   if (form) {
     form.addEventListener('input', function() {
