@@ -39,11 +39,17 @@ const showError = (msg) => window.showError && window.showError(msg);
  * Формат каждого элемента:
  *   { value: строка для БП/БД, label: отображаемый текст в select-е }
  */
+// Значения — enum-ID вариантов поля UF_CRM_1755609681 (прод). БП «Назначить
+// встречу» (TEMPLATE_ID=40) пишет ConsultationChannel в это enumeration-поле,
+// поэтому передаём именно ID, а не текст (текстовые «Звонок»/«Яндекс Телемост»
+// в поле больше не существуют → БП записал бы пусто/мусор). Список синхронизирован
+// с OPTS_CHANNEL в form-render.js.
 export const CONSULTATION_CHANNELS = [
-  { value: 'Звонок',           label: 'Звонок' },           // Обычный телефонный звонок.
-  { value: 'WhatsApp',         label: 'WhatsApp' },          // Мессенджер WhatsApp.
-  { value: 'Telegram',         label: 'Telegram' },          // Мессенджер Telegram.
-  { value: 'Яндекс Телемост',  label: 'Яндекс Телемост' }   // Видеоконференция через Яндекс.
+  { value: '4280', label: 'WhatsApp' },        // enum-ID 4280
+  { value: '4281', label: 'Telegram' },        // enum-ID 4281
+  { value: '4340', label: 'Max (мессенджер)' },// enum-ID 4340
+  { value: '5424', label: 'SMS' },             // enum-ID 5424
+  { value: '5442', label: 'Не отправлять' }    // enum-ID 5442
 ];
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -79,31 +85,38 @@ export function selectSlot(calId, slot) {
       return `<option value="${escHtml(ch.value)}">${escHtml(ch.label)}</option>`;
     }).join('');
 
-    // Вставляем HTML-разметку панели бронирования.
+    // Вставляем HTML-разметку панели бронирования. Оформлена карточкой в стиле
+    // основной анкеты: bg-white, border-gray-200, rounded-lg, shadow-sm.
     bookingBody.innerHTML =
-      '<div class="space-y-2">' +
-      // Строка: имя МП.
-      `<div class="text-xs text-gray-500">МП: <span class="font-semibold text-gray-800">${escHtml(mp.short)}</span></div>` +
-      // Строка: время МП в его TZ.
-      `<div class="text-xs text-gray-500">Время МП: <span class="font-mono font-semibold text-gray-800">${ 
-        escHtml(fmtHour(slot.utcMs, mp.utc))} UTC+${mp.utc}</span></div>${ 
-      // Строка: время клиента (отображается только если TZ клиента известен).
-        _clientUtc !== null
-          ? `<div class="text-xs text-gray-500">Время клиента: <span class="font-mono font-semibold text-blue-600">${ 
-            escHtml(fmtHour(slot.utcMs, _clientUtc))} UTC+${_clientUtc}</span></div>`
-          : '' 
-      // Селект «Канал консультации».
-      }<div class="flex flex-col gap-0.5">` +
-        '<label for="bp-channel" class="text-[11px] font-medium text-gray-500">Канал консультации</label>' +
-        '<select id="bp-channel" class="bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-md ' +
-          `focus:ring-blue-500 focus:border-blue-500 block w-full px-2 py-1">${ 
+      '<div class="bg-white border border-gray-200 rounded-lg shadow-sm p-4 space-y-3">' +
+      // Заголовок карточки.
+      '<div class="flex items-center gap-2 text-sm font-semibold text-gray-900">' +
+        '<span class="w-5 h-5 rounded bg-blue-50 flex items-center justify-center text-blue-500">' +
+          '<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+          '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></span>' +
+        'Подтверждение записи</div>' +
+      // Детали записи (МП / время).
+      '<div class="space-y-1">' +
+        `<div class="flex justify-between text-xs"><span class="text-gray-500">МП</span><span class="font-medium text-gray-800">${escHtml(mp.short)}</span></div>` +
+        `<div class="flex justify-between text-xs"><span class="text-gray-500">Время МП</span><span class="font-mono font-medium text-gray-800">${
+          escHtml(fmtHour(slot.utcMs, mp.utc))} UTC+${mp.utc}</span></div>${
+          _clientUtc !== null
+            ? `<div class="flex justify-between text-xs"><span class="text-gray-500">Время клиента</span><span class="font-mono font-medium text-blue-600">${
+              escHtml(fmtHour(slot.utcMs, _clientUtc))} UTC+${_clientUtc}</span></div>`
+            : ''
+        }</div>` +
+      // Селект «Канал консультации» — стиль design-system (text-sm, p-2).
+      '<div class="flex flex-col gap-1">' +
+        '<label for="bp-channel" class="block text-sm font-medium text-gray-700">Канал консультации</label>' +
+        '<select id="bp-channel" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg ' +
+          `focus:ring-blue-500 focus:border-blue-500 block w-full p-2">${
             channelOpts  // Список опций канала.
           }</select>` +
       '</div>' +
-      // Кнопка подтверждения бронирования.
+      // Кнопка подтверждения бронирования (зелёный CTA, размер как primary).
       '<button type="button" id="btn-book-confirm" ' +
-        'class="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors">' +
-        '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
+        'class="w-full justify-center inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 focus:ring-2 focus:ring-green-300 transition-colors">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">' +
           '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>' +
         'Подтвердить запись</button>' +
       '</div>';
@@ -165,7 +178,7 @@ function fmtIsoWithOffset(utcMs, offsetH) {
  *   - DateTime        — дата/время встречи в локальном времени МП, ISO 8601 (например "2026-05-13T14:00:00+03:00").
  *   - DateTimeClient  — та же встреча в локальном времени клиента в ISO (или времени МП, если TZ клиента неизвестен).
  *   - CalendarMenager — числовой enumId варианта поля UF_CRM_1747120414 «Менеджер встречи» (например 2103 = МП5, 5092 = МП7).
- *   - ConsultationChannel — enumId варианта поля UF_CRM_1755609681 (4279=Звонок, 4280=WhatsApp, 4281=Telegram, 4282=Яндекс Телемост, 4330=Сайт, 4340=Max).
+ *   - ConsultationChannel — enumId варианта поля UF_CRM_1755609681 (4280=WhatsApp, 4281=Telegram, 4340=Max (мессенджер), 5424=SMS, 5442=Не отправлять).
  *   - CelNeCel        — enumId варианта поля UF_CRM_1649136704 (289=Целевой, 290=Нецелевой, 291=Не определено).
  *
  * @param {string} calId — идентификатор календаря МП.
@@ -230,9 +243,11 @@ export function bookSlot(calId, slot) {
   // Глобальный конфиг приложения.
   const cfg = window.APP_CONFIG || {};
 
-  // Читаем выбранный канал консультации из select-а.
+  // Читаем выбранный канал консультации из select-а. value — enum-ID
+  // (UF_CRM_1755609681); channelLabel — человекочитаемая подпись для таймлайна.
   const channelEl = document.getElementById('bp-channel');
-  const channel   = channelEl ? channelEl.value : 'Звонок'; // По умолчанию — звонок.
+  const channel   = channelEl ? channelEl.value : (CONSULTATION_CHANNELS[0] && CONSULTATION_CHANNELS[0].value) || '';
+  const channelLabel = (CONSULTATION_CHANNELS.find(function (c) { return c.value === channel; }) || {}).label || channel;
 
   // Форматируем время встречи для МП: перевод UTC → локальное время МП в ISO 8601.
   // Пример: UTC 11:00, МП в UTC+3 → "2026-05-13T14:00:00+03:00".
@@ -292,7 +307,7 @@ export function bookSlot(calId, slot) {
     // Пишем информационный комментарий в таймлайн лида.
     // Передаём targetStatus — оценку «Целевой/Нецелевой» и список причин
     // для расширенного комментария по стандарту Нецелевой.
-    notifyMpByCalId(calId, slot, fio, channel, targetStatus);
+    notifyMpByCalId(calId, slot, fio, channelLabel, targetStatus);
 
     // Сбрасываем счётчик автопереходов и перезагружаем расписание
     // (теперь слот будет помечен как занятый).
@@ -308,7 +323,7 @@ export function bookSlot(calId, slot) {
           '<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>' +
         `<span>Запись подтверждена: ${escHtml(mp.short)}, ${ 
           escHtml(fmtHour(slot.utcMs, mp.utc))} UTC+${mp.utc 
-        }, канал: ${escHtml(channel)}</span>`;
+        }, канал: ${escHtml(channelLabel)}</span>`;
       statusEl.classList.remove('hidden'); // Делаем блок статуса видимым.
     }
   });
