@@ -313,10 +313,6 @@ export function collectFormData() {
     // Берём из window.__targetStatus (обновляется каждый раз при change на форме).
     // Передаётся в field-mapper как targetStatusId → записывается в UF_CRM_1649136704.
     // Если виджет ещё не пересчитан — null, маппер проигнорирует поле.
-    // ── Блок 10: Канал связи и комментарий к записи ───────────────────────────
-    channel:        v('f-channel'),               // Канал связи (enumId: 4280/4281/и т.д.)
-    bookingComment: v('f-booking-comment'),        // Комментарий к записи
-
     targetStatusId: (window.__targetStatus && window.__targetStatus.id != null)
       ? String(window.__targetStatus.id)
       : null

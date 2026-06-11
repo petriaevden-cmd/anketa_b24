@@ -134,12 +134,10 @@ export function mapFormToBitrixFields(form) {
   if (form.bookedTimeMP)        out.UF_CRM_1598875875    = form.bookedTimeMP;
   if (form.bookedTimeClient)    out.UF_CRM_1750343005859 = form.bookedTimeClient;
 
-  // Группа 5б. Канал связи и комментарий к записи
-  if (form.channel) {
-    const channelId = parseInt(String(form.channel), 10);
-    if (!isNaN(channelId)) out.UF_CRM_1755609681 = channelId;
-  }
-  if (form.bookingComment) out.UF_BOOKING_COMMENT = form.bookingComment;
+  // Канал консультации (UF_CRM_1755609681) теперь задаётся в booking-панели и
+  // уходит в БП «Назначить встречу» (booking.js), а не через сохранение анкеты.
+  // Раздел «10. Запись» удалён, поэтому form.channel/form.bookingComment больше
+  // не приходят и в лид отсюда не пишутся.
 
   // Группа 6. Целевой/Нецелевой КЦ.
   // Значение берётся из window.__targetStatus.id, рассчитанного evaluateTargetStatus().

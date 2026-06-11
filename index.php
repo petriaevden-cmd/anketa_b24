@@ -17,8 +17,7 @@
  *   7. Семейное положение          (#section-7-body)   — Брак, Дети, Совместн.имущество → блок
  *   8. Фирмы и юрлица              (#section-8-body)   — ООО → блок; ИП
  *   9. Прочие обстоятельства      (#section-9-body)   — За другого, АС, Судимость → блок
- *  10. Запись                      (#section-10-body)  — Канал, Комментарий
- *      Бронирование               (#booking-body)     — рендерит booking.js
+ *      Бронирование               (#booking-body)     — рендерит booking.js (канал + комментарий)
  *  Заметки менеджера           (#manager-body)
  *  Итог по разговору          (#target-status-badge, #verdict-reasons)
  */
@@ -259,12 +258,6 @@ $currentUser = [
           <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
             <h2 class="mb-3 text-base font-semibold text-gray-900">9. Прочие важные обстоятельства</h2>
             <div id="section-9-body"></div>
-          </section>
-
-          <!-- 10. Запись -->
-          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
-            <h2 class="mb-3 text-base font-semibold text-gray-900">10. Запись</h2>
-            <div id="section-10-body"></div>
           </section>
 
           <!-- Заметки менеджера (без номера — сквозной блок) -->

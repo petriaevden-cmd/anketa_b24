@@ -16,7 +16,7 @@
 import {
   fieldText, fieldNumber, fieldSelect, fieldTextarea,
   fieldCheckbox, fieldRadio, fieldCity, escHtml, attachMoneyMask,
-  OPTS_SALARY_CARD, OPTS_MARITAL, OPTS_CHILDREN, OPTS_CHANNEL
+  OPTS_SALARY_CARD, OPTS_MARITAL, OPTS_CHILDREN
 } from './form-render.js';
 import { clearCityError } from './form-submit.js';
 import { setClientCity } from './slots.js';
@@ -327,20 +327,9 @@ export function initForm(lead) {
       `</div>`;
   }
 
-  // ── БЛОК 10: Запись ───────────────────────────────────────────────────────
-  const sec10 = document.getElementById('section-10-body');
-  if (sec10) {
-    sec10.className = 'space-y-4';
-
-    const channelVal = f.UF_CRM_1755609681 ? String(f.UF_CRM_1755609681) : '';
-    const bookingComment = f.UF_BOOKING_COMMENT || '';
-
-    sec10.innerHTML =
-      fieldSelect('f-channel', 'Канал связи', channelVal, OPTS_CHANNEL) +
-      `<p class="text-xs text-gray-400 dark:text-gray-500">Значения взяты из поля портала crm.yurclick.com (UF_CRM_1755609681).</p>` +
-      fieldText('f-booking-comment', 'Комментарий к записи / договорённость по времени', bookingComment,
-        { placeholder: 'Например: перезвонить завтра в 15:00' });
-  }
+  // Раздел «10. Запись» удалён: канал консультации и комментарий теперь
+  // задаются в booking-панели справа (booking.js, select #bp-channel) и уходят
+  // в БП «Назначить встречу». Анкета их больше не собирает и не пишет в лид.
 
   // ── Поле города (блок 1 → отдельный рендер в шапке) ──────────────────────
   // Город рендерится в шапке формы через отдельный контейнер #city-field-body
