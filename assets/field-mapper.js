@@ -134,6 +134,11 @@ export function mapFormToBitrixFields(form) {
   if (form.bookedTimeMP)        out.UF_CRM_1598875875    = form.bookedTimeMP;
   if (form.bookedTimeClient)    out.UF_CRM_1750343005859 = form.bookedTimeClient;
 
+  // Канал консультации (UF_CRM_1755609681) теперь задаётся в booking-панели и
+  // уходит в БП «Назначить встречу» (booking.js), а не через сохранение анкеты.
+  // Раздел «10. Запись» удалён, поэтому form.channel/form.bookingComment больше
+  // не приходят и в лид отсюда не пишутся.
+
   // Группа 6. Целевой/Нецелевой КЦ.
   // Значение берётся из window.__targetStatus.id, рассчитанного evaluateTargetStatus().
   // 289 = Целевой, 290 = Нецелевой, 291 = Не определено.

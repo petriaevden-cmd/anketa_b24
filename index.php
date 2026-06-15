@@ -6,17 +6,56 @@
  * Frontend: Tailwind CSS 4 + Flowbite 2
  * Самописные CSS-файлы НЕ подключаются.
  *
- * Порядок блоков (синхронизирован с form.js):
- *   1. Персональные данные  (#personal-body)  — включает поле «Город» → TZ
- *   2. Финансовые данные   (#finance-body)
- *   3. Кредитная история   (#credit-body)
- *   4. Заметки менеджера  (#manager-body)
- *   5. Запись на встречу  (#booking-body)
+ * Порядок блоков (v5-latest, синхронизирован с form-init.js):
+ *   Поле «Город»  (#city-field-body)   — отдельно вверху
+ *   1. Как могу обращаться?     (#section-1-body)   — ФИО
+ *   2. Сумма долга и что?        (#section-2-body)   — Долг, Кредиторы, Несписываемый
+ *   3. Платежи / просрочки?        (#section-3-body)   — Просрочки, ФССП, Удержания
+ *   4. Работаете официально?      (#section-4-body)   — Доходы, Зарпкарта, КМ-невыгодно
+ *   5. Ипотека и залог               (#section-5-body)   — Ипотека → блок; Залог → блок
+ *   6. Имущество и сделки           (#section-6-body)   — Имущество → репитер; Сделки → блок
+ *   7. Семейное положение          (#section-7-body)   — Брак, Дети, Совместн.имущество → блок
+ *   8. Фирмы и юрлица              (#section-8-body)   — ООО → блок; ИП
+ *   9. Прочие обстоятельства      (#section-9-body)   — За другого, АС, Судимость → блок
+ *      Бронирование               (#booking-body)     — рендерит booking.js (канал + комментарий)
+ *  Заметки менеджера           (#manager-body)
+ *  Итог по разговору          (#target-status-badge, #verdict-reasons)
  */
 
 require_once __DIR__ . '/config.php';
 
-$portalHost  = htmlspecialchars(parse_url(PORTAL_URL, PHP_URL_HOST), ENT_QUOTES);
+// ─── Определение реального портала по параметру DOMAIN ───────────────────────
+//
+// Приложение — локальное (local) приложение Битрикс24, которое хостится на
+// ТРЕТЬЕМ домене (apcheit.ru) и открывается порталом в iframe по адресу вида
+//   https://apcheit.ru/yurclick/anketa-kc/index.php?DOMAIN=crm.yurclick.com&PROTOCOL=1&...&APP_SID=...
+// Битрикс24 кладёт реальный хост портала в $_GET['DOMAIN'].
+//
+// Проблема: config.php выбирает PORTAL_URL/APP_ENV/WEBHOOK_URL по HTTP_HOST.
+// На apcheit.ru HTTP_HOST === 'apcheit.ru', а не портал → host-логика дала бы
+// dev, и applayout.js подключился бы НЕ с того портала. Поэтому, если Битрикс
+// передал DOMAIN из белого списка, переопределяем портал/окружение по нему.
+//
+// Белый список — только публичные хосты порталов (не секрет). WEBHOOK_URL
+// остаётся за config.php (там лежит секретный ключ; см. отчёт — там же diff,
+// чтобы и вебхук выбирался по DOMAIN на сервере).
+$DOMAIN_PORTAL_MAP = [
+    'crm.yurclick.com' => ['url' => 'https://crm.yurclick.com', 'env' => 'prod'],
+    'dev.yurclick.com' => ['url' => 'https://dev.yurclick.com', 'env' => 'dev'],
+];
+
+$reqDomain = isset($_GET['DOMAIN']) ? strtolower(trim((string) $_GET['DOMAIN'])) : '';
+if ($reqDomain !== '' && isset($DOMAIN_PORTAL_MAP[$reqDomain])) {
+    // DOMAIN из доверенного списка → портал и окружение берём из него.
+    $portalUrl = $DOMAIN_PORTAL_MAP[$reqDomain]['url'];
+    $appEnv    = $DOMAIN_PORTAL_MAP[$reqDomain]['env'];
+} else {
+    // DOMAIN не передан или неизвестен → фолбэк на значения из config.php.
+    $portalUrl = rtrim((string) PORTAL_URL, '/');
+    $appEnv    = (string) APP_ENV;
+}
+$portalHost = htmlspecialchars(parse_url($portalUrl, PHP_URL_HOST) ?: '', ENT_QUOTES);
+
 $salesDeptId  = (int) SALES_DEPT_ID;
 $bpTemplateId = (int) BP_TEMPLATE_ID;
 $slotMin     = (int) SLOT_DURATION_MIN;
@@ -36,6 +75,25 @@ $currentUser = [
     'LAST_NAME' => (string)($_REQUEST['USER_LAST_NAME'] ?? ''),
     'EMAIL'     => (string)($_REQUEST['USER_EMAIL']  ?? ''),
 ];
+
+// ─── URL файла логов (logs.txt) ──────────────────────────────────────────────
+//
+// Баг: в iframe на apcheit.ru ссылка «логи» вела на сам index.php с query
+// (?DOMAIN=...&APP_SID=...#). Причина — пустой logUrl + href="#": браузер шёл
+// на «#» относительно текущего URL iframe (а тот с GET-параметрами).
+//
+// Чиним детерминированно: строим путь к logs.txt от пути СКРИПТА (без query),
+// рядом с index.php/logger.php. SCRIPT_NAME query не содержит; на всякий случай
+// дополнительно отрезаем всё после '?'. Если хост не пришёл — фолбэк на
+// относительный путь (тот же каталог), который не зависит от GET-параметров.
+$logScriptPath = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
+$logScriptPath = strtok($logScriptPath, '?');           // отрезаем query, если вдруг есть
+$logDir        = rtrim(str_replace('\\', '/', dirname($logScriptPath)), '/'); // .../anketa-kc
+$logHost       = (string) ($_SERVER['HTTP_HOST'] ?? '');
+$logScheme     = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http';
+$logUrl        = $logHost !== ''
+    ? $logScheme . '://' . $logHost . $logDir . '/logs.txt'  // абсолютный, без query
+    : $logDir . '/logs.txt';                                 // относительный фолбэк
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -45,19 +103,30 @@ $currentUser = [
   <title>Анкета</title>
 
   <!--
-    BX24 JS SDK подключается самим Битрикс24 при загрузке iframe-плейсмента:
-    портал оборачивает наш контент и выдаёт window.BX24 с реальным
-    OAuth-токеном. Ручное подключение SDK не требуется.
-    При прямом открытии (dev/QA) BX24 подменяется shim'ом из assets/webhook-client.js.
+    BX24 JS SDK НЕ подключается Битрикс24 автоматически — мы делаем это сами
+    ниже, в блоке «ВЫБОР РЕЖИМА»: внутри iframe грузим applayout.js с портала
+    (коробка) с фолбэком на облачный CDN; вне iframe вместо SDK включается
+    shim из assets/webhook-client.js. См. подробности там же.
   -->
 
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" />
 
   <style>
     html, body { margin: 0; padding: 0; overflow: hidden; }
     #app { height: 100vh; overflow: hidden; }
     .panel-scroll { overflow-y: auto; }
+
+    /* Скрытые sr-only radio (position:absolute) должны иметь позиционированного
+       предка — иначе их containing block становится страница (ICB), used-позиция
+       уходит в координаты документа за пределы окна, и при фокусе браузер
+       скроллит viewport к этой «призрачной» точке (прыжок на уровне окна,
+       несмотря на body overflow:hidden). Делаем label-обёртку relative.
+       Класс relative также проставлен в form-render.js (fieldRadio); это
+       CSS-дублёр на случай sr-only без класса, не требует :has(). */
+    #anketa-form label:has(> input.sr-only),
+    .anketa-radio-label { position: relative; }
+
     .panel-scroll::-webkit-scrollbar { width: 4px; }
     .panel-scroll::-webkit-scrollbar-track { background: transparent; }
     .panel-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
@@ -67,7 +136,7 @@ $currentUser = [
     window.APP_CONFIG = {
       salesDeptId:   <?= $salesDeptId ?>,
       bpTemplateId:  <?= $bpTemplateId ?>,
-      appEnv:        <?= json_encode(APP_ENV) ?>,
+      appEnv:        <?= json_encode($appEnv) ?>,
       slotMin:      <?= $slotMin ?>,
       horizonDays:  <?= $horizonDays ?>,
       // Баг 11 fix: pollingMs удалён — автообновление отключено, только ручное.
@@ -80,46 +149,64 @@ $currentUser = [
       // В dev-режиме (webhook-shim) используется как MOCK_CURRENT_USER.
       // В iframe-режиме не используется — BX24 SDK возвращает реального юзера сам.
       currentUser:  <?= json_encode($currentUser, JSON_UNESCAPED_UNICODE) ?>,
-      // URL файла лога — используется для ссылки в шапке и в logger-client.js.
-      logUrl: '<?= (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') ?>/logs.txt'
+      // URL файла лога — используется для ссылки в шапке. Строится от пути
+      // скрипта без query (см. $logUrl выше), чтобы не подхватывать ?DOMAIN/?APP_SID.
+      logUrl: <?= json_encode($logUrl) ?>
     };
   </script>
 
   <!--
-    === WEBHOOK MODE (автоопределение) ===
+    === ВЫБОР РЕЖИМА: BX24 SDK (в iframe) или webhook-shim (вне iframe) ===
 
-    Логика выбора режима:
+    Определяем по `window.self === window.top`:
 
-    1. Если приложение открыто внутри ифрейма Битрикс24 (были переданы
-       параметры DOMAIN и APP_SID — они приходят только от самого
-       Битрикс24), используем реальный BX24 SDK. Тогда:
+    1. ВНУТРИ iframe Битрикс24 (self !== top) → используем реальный BX24 SDK.
+       Сам SDK НЕ грузится Битриксом автоматически — его нужно подключить.
+       Для коробочного портала корректный путь — applayout.js с самого
+       портала: PORTAL_URL + '/bitrix/js/rest/applayout.js'. Если он почему-то
+       не отдастся (старая версия / облако), есть fallback на облачный CDN
+       //api.bitrix24.com/api/v1/. Тогда:
          - placement.info() вернёт ID реального текущего лида,
-         - user.current вернёт реального пользователя, открывшего приложение,
+         - user.current вернёт реального пользователя,
          - вызовы API идут от имени текущего юзера через OAuth.
 
-    2. Если приложение открыто напрямую (dev/отладка вне ифрейма) —
-       включаем webhook-shim. Сам вебхук-клиент берёт leadId из
-       URL-параметров ?clientID / ?leadId.
+    2. ВНЕ iframe (self === top) — страница открыта напрямую по ссылке
+       (например, кнопка в карточке лида с ?leadId=...). BX24 SDK там не
+       работает, поэтому включаем webhook-shim. Он берёт leadId из
+       URL-параметров ?clientID / ?leadId и ходит в REST через вебхук.
 
-    Раньше флаг был жёстко прибит к true, из-за чего в карточке лида всегда
-    показывался mock-лид (или дефолт 59466) и mock-юзер «Тестовый Пользователь».
+    ВАЖНО: режим определяется на клиенте по iframe, а НЕ по APP_ENV. Это
+    позволяет открывать прод-страницу напрямую (вне iframe) и всё равно
+    получить рабочий шим. APP_ENV/WEBHOOK_URL из config.php лишь выбирают,
+    в какой портал ходит вебхук.
+
+    SDK подключается синхронно (document.write) ТОЛЬКО в iframe-режиме, чтобы
+    не конфликтовать с шимом: webhook-client.js ставит window.BX24 лишь когда
+    window.APP_USE_WEBHOOK === true.
   -->
-  <?php
-    // Серверное определение: приложение запущено внутри Битрикс24,
-    // если переданы параметры DOMAIN и APP_SID — их подкладывает
-    // сам портал при загрузке iframe плейсмента.
-    $isInsideBitrix = !empty($_REQUEST['DOMAIN']) && !empty($_REQUEST['APP_SID']);
-    // Инвертируем: webhook-режим нужен только когда мы НЕ внутри Битрикс24.
-    $useWebhook = $isInsideBitrix ? 'false' : 'true';
-  ?>
   <script>
-    // Автоопределение режима. Значение подставляется сервером как литерал true/false.
-    window.APP_USE_WEBHOOK = <?= $useWebhook ?>;
+    // Вне iframe (self === top) → webhook-shim; внутри iframe → BX24 SDK.
+    window.APP_USE_WEBHOOK = (window.self === window.top);
+
+    if (!window.APP_USE_WEBHOOK) {
+      // iframe-режим: синхронно подключаем BX24 SDK ДО webhook-client.js/app.js.
+      // Сначала applayout.js с самого портала (коробка), затем — облачный fallback.
+      var __portalUrl = <?= json_encode($portalUrl) ?>;
+      var __sdkSrc = (__portalUrl ? __portalUrl + '/bitrix/js/rest/applayout.js'
+                                  : '//api.bitrix24.com/api/v1/');
+      document.write('<script src="' + __sdkSrc + '"><\/script>');
+      // Fallback на облачный CDN, если портальный applayout.js не определил BX24.
+      document.write(
+        '<script>if(!window.BX24){document.write(' +
+        '\'<scr\' + \'ipt src="//api.bitrix24.com/api/v1/"><\\/scr\' + \'ipt>\'' +
+        ');}<\/script>'
+      );
+    }
   </script>
   <!-- tz-utils.js должен загружаться ДО webhook-client.js -->
   <script src="assets/tz-utils.js"></script>
   <script src="assets/webhook-client.js"></script>
-  <!-- === END: WEBHOOK MODE === -->
+  <!-- === END: ВЫБОР РЕЖИМА === -->
 </head>
 
 <body class="bg-gray-100 text-gray-800 text-sm antialiased">
@@ -133,7 +220,7 @@ $currentUser = [
        rel="noopener noreferrer"
        class="font-bold text-gray-900 text-sm tracking-tight no-underline hover:underline hover:text-blue-600 transition-colors cursor-default hover:cursor-pointer"
        title="Открыть лог-файл"
-       onclick="if(window.APP_CONFIG&&window.APP_CONFIG.logUrl){this.href=window.APP_CONFIG.logUrl;}return true;">Анкета</a>
+       onclick="var u=window.APP_CONFIG&&window.APP_CONFIG.logUrl;if(u){this.href=u;return true;}event.preventDefault();return false;">Анкета</a>
     <div class="w-px h-4 bg-gray-200"></div>
     <div id="lead-title" class="text-xs text-gray-500 truncate">Лид — загрузка...</div>
     <div class="ml-auto flex items-center gap-2 text-xs text-gray-400">
@@ -144,7 +231,7 @@ $currentUser = [
 
   <div class="flex flex-1 overflow-hidden">
 
-    <div class="flex flex-col border-r border-gray-200 bg-gray-50" style="width:55%;min-width:300px;">
+    <div class="flex flex-col border-r border-gray-200 bg-gray-50" style="width:40%;min-width:340px;">
 
       <div class="bg-white border-b border-gray-100 px-4 py-2 shrink-0">
         <div class="flex items-center justify-between mb-1">
@@ -174,73 +261,104 @@ $currentUser = [
         </div>
       </div>
 
-      <form id="anketa-form" class="hidden flex-col flex-1 w-full overflow-y-auto overflow-x-hidden" novalidate>
-        <div class="flex flex-col gap-3 px-4 py-3 w-full">
+      <!--
+        Скролл-обёртка (как в прототипе): прокручивается именно ЭТОТ контейнер,
+        а сама <form> остаётся блоком в обычном потоке. Так браузеру нечего
+        «доводить в зону видимости» при фокусе скрытых sr-only radio — форма
+        не прыгает. overflow-anchor-хак больше не нужен.
+      -->
+      <div class="flex-1 w-full overflow-y-auto overflow-x-hidden">
+      <form id="anketa-form" class="hidden w-full" novalidate>
+        <div class="flex flex-col gap-5 px-4 py-3 w-full">
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">1</span>
-              <span class="text-xs font-semibold text-gray-700">Персональные</span>
-            </div>
-            <div id="personal-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- Поле города (отдельно — влияет на TZ расписания) -->
+          <div id="city-field-body" class="bg-white border border-gray-200 rounded-lg shadow-sm p-5"></div>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">2</span>
-              <span class="text-xs font-semibold text-gray-700">Финансы</span>
-            </div>
-            <div id="finance-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- 1. Обращение -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">1. Как могу к вам обращаться?</h2>
+            <div id="section-1-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">3</span>
-              <span class="text-xs font-semibold text-gray-700">Кредитная</span>
-            </div>
-            <div id="credit-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- 2. Долг -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">2. Какая сумма долга и что за долг?</h2>
+            <div id="section-2-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">4</span>
-              <span class="text-xs font-semibold text-gray-700">Заметки</span>
-            </div>
-            <div id="manager-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-          </div>
+          <!-- 3. Просрочки / приставы / удержания -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">3. Платите или есть просрочки?</h2>
+            <div id="section-3-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">5</span>
-              <span class="text-xs font-semibold text-gray-700">Признаки нецелевой</span>
-              <span id="target-status-badge"
-                    class="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800">
-                Не определено
-              </span>
-            </div>
-            <div id="netselevoi-body" class="px-3 py-3 flex flex-col gap-2 text-xs"></div>
-            <div id="target-status-reasons"
-                 class="hidden px-3 py-2 border-t border-gray-100 bg-red-50 text-xs text-red-800">
-              <div class="font-semibold mb-1">Причины:</div>
-              <ul class="list-disc list-inside space-y-0.5"></ul>
-            </div>
-          </div>
+          <!-- 4. Доход и работа -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">4. Работаете официально? Какой доход?</h2>
+            <div id="section-4-body"></div>
+          </section>
 
-          <div class="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50 rounded-t-lg">
-              <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-500 text-white text-[10px] font-bold shrink-0">6</span>
-              <span class="text-xs font-semibold text-gray-700">Запись</span>
+          <!-- 5. Ипотека и залоговое имущество -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">5. Ипотека и залоговое имущество</h2>
+            <div id="section-5-body"></div>
+          </section>
+
+          <!-- 6. Крупное имущество и сделки -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">6. Крупное имущество и сделки</h2>
+            <div id="section-6-body"></div>
+          </section>
+
+          <!-- 7. Семейное положение -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">7. Семейное положение</h2>
+            <div id="section-7-body"></div>
+          </section>
+
+          <!-- 8. Фирмы и юрлица -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">8. Фирмы и юрлица</h2>
+            <div id="section-8-body"></div>
+          </section>
+
+          <!-- 9. Прочие важные обстоятельства -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">9. Прочие важные обстоятельства</h2>
+            <div id="section-9-body"></div>
+          </section>
+
+          <!-- Заметки менеджера (без номера — сквозной блок) -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">Заметки менеджера</h2>
+            <div id="manager-body"></div>
+          </section>
+
+          <!-- Итог по разговору -->
+          <section class="p-5 bg-white border border-gray-200 rounded-lg shadow-sm">
+            <h2 class="mb-3 text-base font-semibold text-gray-900">Итог по разговору</h2>
+            <div id="target-status-badge"
+                 class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg bg-yellow-100 text-yellow-800">
+              Статус: не определено
             </div>
-            <div id="booking-body" class="px-3 py-3 text-xs text-gray-400">
-              <span class="inline-flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                Выберите слот справа →
-              </span>
+            <div id="verdict-reasons" class="hidden mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
+              <p class="text-sm font-medium text-red-800 mb-1">Причины «нецелевой»:</p>
+              <ul id="verdict-reasons-list" class="list-disc list-inside text-sm text-red-700 space-y-0.5"></ul>
             </div>
-          </div>
+            <p class="mt-2 text-xs text-gray-500">Статус считается автоматически по стандарту и записывается в поле Битрикс24.</p>
+          </section>
+
+          <!-- Скрытые поля бронирования (заполняются booking.js при выборе слота) -->
+          <input type="hidden" id="f-bookedManagerCalId" name="f-bookedManagerCalId" value="">
+          <input type="hidden" id="f-bookedTimeMP" name="f-bookedTimeMP" value="">
+          <input type="hidden" id="f-bookedTimeClient" name="f-bookedTimeClient" value="">
+
+          <!-- Панель подтверждения бронирования (booking.js рендерит сюда UI после выбора слота) -->
+          <div id="booking-body"></div>
 
         </div>
       </form>
+      </div>
 
       <div class="bg-white border-t border-gray-200 px-4 py-2 flex items-center gap-2 shrink-0">
         <button id="btn-save" type="submit" form="anketa-form"
