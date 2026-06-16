@@ -18,9 +18,9 @@
 //      названий «| МП N» больше не нужно. События с DELETED='Y' и
 //      ACCESSIBILITY='free' отфильтровываются — они не блокируют слот.
 //
-//   3. buildFreeSlots() пересекает рабочий график МП с занятостью и с
-//      «разумным» временем клиента (09:00–20:00 в TZ клиента), и отдаёт
-//      список свободных слотов.
+//   3. buildFreeSlots() пересекает рабочий график МП (в TZ МП) с его
+//      занятостью и отдаёт список свободных слотов. TZ клиента на
+//      доступность не влияет — только на отображение времени в заголовках.
 //
 // ЧТО УБРАНО ИЗ v2
 // ────────────────────────────────────────────────────────────────────────────
@@ -418,15 +418,19 @@ function _eventUtcMs(ev, field) {
  *   1. Перебираем часы рабочего дня МП [from..to) в его TZ.
  *   2. Для каждого часа считаем UTC-границы слота.
  *   3. Отбрасываем слоты в прошлом.
- *   4. Если TZ клиента известен — отбрасываем слоты вне 09:00–20:00 по клиенту.
- *   5. Если день не входит в workDays МП — слотов в этот день нет.
- *   6. Иначе проверяем пересечение с событиями занятости через _eventUtcMs.
+ *   4. Если день не входит в workDays МП — слотов в этот день нет.
+ *   5. Иначе проверяем пересечение с событиями занятости через _eventUtcMs.
+ *
+ * Доступность слота определяется ТОЛЬКО рабочим графиком и занятостью МП
+ * (в TZ МП). TZ клиента на доступность НЕ влияет — он используется лишь для
+ * отображения времени в заголовках колонок (см. collectAllHours). Клиент
+ * выбирает удобное ему время, а вопрос «работает ли МП в этот абсолютный
+ * момент» решается по графику МП. Поэтому слот остаётся доступным, даже если
+ * по времени клиента он выходит за «разумные» рамки рабочего дня.
  */
 export function buildFreeSlots(mp, day, busy) {
   const cfg       = window.APP_CONFIG || {};
   const slotMs    = (mp.slotMinutes || cfg.slotMin || 60) * 60000;
-  const clientMin = cfg.clientHrMin || 9;
-  const clientMax = cfg.clientHrMax || 20;
   const now       = Date.now();
   const slots     = [];
 
@@ -440,11 +444,6 @@ export function buildFreeSlots(mp, day, busy) {
     const slotEndUtcMs = slotUtcMs + slotMs;
 
     if (slotEndUtcMs <= now) continue;
-
-    if (_clientUtc !== null) {
-      const clientHour = new Date(slotUtcMs + _clientUtc * 3600000).getUTCHours();
-      if (clientHour < clientMin || clientHour >= clientMax) continue;
-    }
 
     const isBusy = busy.some(function (ev) {
       const evFrom = _eventUtcMs(ev, 'DATE_FROM');
