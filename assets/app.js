@@ -22,6 +22,7 @@ import { initForm, updateProgress, updateTargetStatusWidget } from './form-init.
 import { saveForm, collectFormData } from './form-submit.js';
 import { initCalendar, setOnRenderComplete } from './calendar-render.js';
 import { setClientCity, loadAllSlots } from './slots.js';
+import { fitWindow, fitWindowNow, startFitWindowObserver } from './fit-window.js';
 // target-status.js, mp-config.js, cities.js, webhook-client.js, tz-utils.js —
 // не модули и подключаются отдельными <script> до этого app.js. Они
 // экспортируют функции через window и используются здесь как глобалы.
@@ -44,6 +45,9 @@ window.loadAllSlots = loadAllSlots;
 // index.php не может напрямую присвоить export let _onRenderComplete внутри ES-модуля.
 // Вызов window.setOnRenderComplete(fn) меняет переменную внутри модуля через сеттер.
 window.setOnRenderComplete = setOnRenderComplete;
+// fit-window: пробрасываем в window, чтобы инлайн-скрипты index.php
+// (кнопка «Обновить расписание» и др.) могли запросить подгонку высоты фрейма.
+window.fitWindow = fitWindow;
 
 // ПРИМЕЧАНИЕ: leadId / currentUser / CURRENT_USERNAME больше не глобальные let —
 // они хранятся в AppState (см. anketa-kc/assets/app-state.js). Если placement.info()
@@ -60,6 +64,13 @@ window.setOnRenderComplete = setOnRenderComplete;
 logEvent('APP_START', { url: window.location.href });
 
 BX24.init(function () {
+
+  // Авто-подгонка высоты фрейма под контент (официальный BX24.fitWindow).
+  // Запускаем наблюдатель за изменениями DOM сразу после init: дальше любой
+  // рендер формы, показ/скрытие блоков, панель бронирования, слоты, сообщения
+  // валидации и статус сохранения сами триггерят дебаунсированный fitWindow.
+  // Вне iframe Битрикс24 (dev/standalone) — безопасный no-op.
+  startFitWindowObserver('app');
 
   // Получаем информацию о текущем плейсменте (месте встраивания приложения в Bitrix24)
   // Определяем ID лида из двух возможных источников:
@@ -208,6 +219,11 @@ BX24.init(function () {
       // Это нужно для автоматического обновления данных (например, статуса слотов) без перезагрузки страницы
       if (typeof startPolling  === 'function') startPolling();
 
+      // Форма и календарь отрисованы — явно подгоняем высоту фрейма под
+      // финальный контент (помимо наблюдателя, на случай если все мутации
+      // прошли до его подписки).
+      fitWindow();
+
       logEvent('APP_READY', { leadId: leadId });
     }
   );
@@ -236,6 +252,10 @@ function showError(msg) {
     wrap.classList.remove('hidden');  // Убираем скрывающий класс, чтобы блок стал видимым
     wrap.classList.add('flex');       // Добавляем flex-отображение для корректного позиционирования
   }
+
+  // Блок ошибки изменил высоту контента. Вызываем явно: showError может
+  // сработать до старта наблюдателя (например, leadId не получен ещё до рендера).
+  fitWindowNow();
 }
 
 /**
