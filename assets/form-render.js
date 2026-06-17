@@ -246,14 +246,20 @@ export function fieldCheckbox(id, label, checked, opts) {
 }
 
 /**
- * fieldCity — поле города с автодополнением и привязкой к TZ.
+ * fieldCity — поле города с самописным выпадающим списком и привязкой к TZ.
+ *
+ * Раньше использовался нативный <datalist>: он не показывал UTC-смещение и
+ * по-разному выглядел в браузерах. Теперь — кастомный дропдаун (#${id}-dropdown),
+ * аналогичный блоку города в прототипе: каждая подсказка показывает название
+ * города и его UTC-смещение. Поведение выпадашки навешивается в form-init.js
+ * (initCityDropdown), здесь — только разметка.
+ *
+ * ВАЖНО: сам #${id} остаётся обычным <input name="${id}"> — на него завязаны
+ * сбор данных (v('f-client-city')), валидация (REQUIRED_FIELDS) и подсветка
+ * ошибки (_showFieldError вставляет #${id}-error сразу после input). Дропдаун
+ * лежит ПОСЛЕ враппера input, чтобы не нарушать эту вставку.
  */
 export function fieldCity(id, label, value) {
-  const citySource = (typeof CITIES_TZ !== 'undefined') ? CITIES_TZ : {};
-  const opts = Object.keys(citySource).map(function(c) {
-    return `<option value="${escHtml(c)}">`;
-  }).join('');
-
   return `
     <div class="flex flex-col gap-1">
       <label for="${id}" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -261,17 +267,38 @@ export function fieldCity(id, label, value) {
         <span class="text-red-500 ml-0.5" title="Обязательное поле">*</span>
         <span class="text-blue-400 font-normal ml-1" title="Часовой пояс">→ TZ</span>
       </label>
-      <input id="${id}" name="${id}" type="text" list="city-list"
-             value="${escHtml(value || '')}"
-             placeholder="Город..."
-             autocomplete="off"
-             required
-             class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg
-                    focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5
-                    dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-      <datalist id="city-list">${opts}</datalist>
+      <div class="relative">
+        <input id="${id}" name="${id}" type="text"
+               value="${escHtml(value || '')}"
+               placeholder="Начните вводить город..."
+               autocomplete="off" spellcheck="false"
+               required
+               class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg
+                      focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5
+                      dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+        <div id="${id}-dropdown" role="listbox"
+             class="hidden absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto
+                    rounded-lg border border-gray-200 bg-white shadow-lg
+                    dark:bg-gray-700 dark:border-gray-600"></div>
+      </div>
       <p id="${id}-error" class="hidden text-xs text-red-500">Укажите город клиента</p>
       <p id="${id}-tz-warn" class="hidden text-xs text-amber-500">Город не найден в справочнике</p>
+    </div>`;
+}
+
+/**
+ * cityOption — разметка одной подсказки в дропдауне города.
+ * Показывает название города и его UTC-смещение (UTC+N).
+ * active=true — визуально подсвечивает (клавиатурная навигация).
+ */
+export function cityOption(name, utc, active) {
+  const hl = active ? ' bg-blue-50 dark:bg-gray-600' : '';
+  return `
+    <div class="city-option flex items-center justify-between px-3 py-2 text-sm cursor-pointer
+                hover:bg-blue-50 dark:hover:bg-gray-600${hl}"
+         role="option" data-name="${escHtml(name)}" data-utc="${escHtml(String(utc))}">
+      <span class="text-gray-900 dark:text-white">${escHtml(name)}</span>
+      <span class="text-xs text-gray-400 dark:text-gray-300 ml-3 whitespace-nowrap">UTC+${escHtml(String(utc))}</span>
     </div>`;
 }
 
