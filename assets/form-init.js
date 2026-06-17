@@ -15,7 +15,7 @@
 
 import {
   fieldText, fieldNumber, fieldSelect, fieldTextarea,
-  fieldCheckbox, fieldRadio, fieldCity, escHtml, attachMoneyMask,
+  fieldCheckbox, fieldRadio, fieldCity, cityOption, escHtml, attachMoneyMask,
   OPTS_SALARY_CARD, OPTS_MARITAL, OPTS_CHILDREN
 } from './form-render.js';
 import { clearCityError } from './form-submit.js';
@@ -336,21 +336,7 @@ export function initForm(lead) {
   const cityBody = document.getElementById('city-field-body');
   if (cityBody) {
     cityBody.innerHTML = fieldCity('f-client-city', 'Город клиента', f.UF_CRM_1521214081);
-    const cityEl = document.getElementById('f-client-city');
-    if (cityEl) {
-      function _onCityChange() {
-        clearCityError();
-        const val = cityEl.value.trim();
-        const warnEl = document.getElementById('f-client-city-tz-warn');
-        if (warnEl) {
-          const known = (!val) || (typeof CITIES_TZ !== 'undefined' && CITIES_TZ[val] !== undefined);
-          warnEl.classList.toggle('hidden', known);
-        }
-        setClientCity(val);
-      }
-      cityEl.addEventListener('change', _onCityChange);
-      cityEl.addEventListener('input',  _onCityChange);
-    }
+    initCityDropdown('f-client-city');
   }
 
   // ── Заметки менеджера (блок 4 старой структуры, оставлен в отдельном контейнере) ──
@@ -413,6 +399,115 @@ export function initForm(lead) {
   // ── Первичный расчёт статуса и прогресса ──────────────────────────────────
   updateTargetStatusWidget();
   updateProgress();
+}
+
+// ─── Самописный выпадающий список города (#f-client-city) ────────────────────
+//
+// Заменяет нативный <datalist>: показывает подсказки с UTC-смещением и работает
+// одинаково во всех браузерах (аналог блока города в прототипе). Сам input
+// остаётся обычным name="f-client-city" — на него завязаны сбор/валидация.
+//
+// Контракт, который сохраняем при любом изменении значения:
+//   1. clearCityError()      — снять подсветку ошибки + спрятать TZ-warn;
+//   2. tz-warn               — показать, если город не найден в CITIES_TZ;
+//   3. setClientCity(val)    — пересчитать TZ клиента и расписание.
+// Эта тройка раньше жила в _onCityChange(); сохраняем её здесь.
+function initCityDropdown(id) {
+  const input = document.getElementById(id);
+  const dropdown = document.getElementById(`${id}-dropdown`);
+  if (!input || !dropdown) return;
+
+  const cities = (typeof CITIES_TZ !== 'undefined') ? CITIES_TZ : {};
+  let activeIdx = -1; // индекс подсвеченной подсказки (клавиатура), -1 — нет
+
+  function applyCity(val) {
+    clearCityError();
+    const warnEl = document.getElementById(`${id}-tz-warn`);
+    if (warnEl) {
+      const known = (!val) || (cities[val] !== undefined);
+      warnEl.classList.toggle('hidden', known);
+    }
+    setClientCity(val);
+  }
+
+  function getMatches(query) {
+    if (!query) return [];
+    const q = query.toLowerCase();
+    const names = Object.keys(cities);
+    const starts = names.filter(function (n) { return n.toLowerCase().startsWith(q); });
+    const contains = names.filter(function (n) {
+      return !n.toLowerCase().startsWith(q) && n.toLowerCase().includes(q);
+    });
+    return starts.concat(contains).slice(0, 12);
+  }
+
+  function closeDropdown() {
+    dropdown.classList.add('hidden');
+    dropdown.innerHTML = '';
+    activeIdx = -1;
+  }
+
+  function renderMatches(matches) {
+    if (!matches.length) { closeDropdown(); return; }
+    dropdown.innerHTML = matches.map(function (name, i) {
+      return cityOption(name, cities[name], i === activeIdx);
+    }).join('');
+    dropdown.classList.remove('hidden');
+
+    dropdown.querySelectorAll('.city-option').forEach(function (el) {
+      // mousedown (не click): срабатывает до blur input, иначе дропдаун
+      // закроется раньше, чем мы успеем выбрать город.
+      el.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        selectCity(el.getAttribute('data-name'));
+      });
+    });
+  }
+
+  function selectCity(name) {
+    input.value = name;
+    closeDropdown();
+    applyCity(name.trim());
+  }
+
+  function refresh() {
+    const q = input.value.trim();
+    activeIdx = -1;
+    if (!q) { closeDropdown(); applyCity(''); return; }
+    renderMatches(getMatches(q));
+    applyCity(q);
+  }
+
+  input.addEventListener('input', refresh);
+  input.addEventListener('focus', function () {
+    const q = input.value.trim();
+    if (q) renderMatches(getMatches(q));
+  });
+  input.addEventListener('blur', function () {
+    // Небольшая задержка, чтобы mousedown по подсказке успел отработать.
+    setTimeout(closeDropdown, 150);
+  });
+  input.addEventListener('keydown', function (e) {
+    const items = dropdown.querySelectorAll('.city-option');
+    if (e.key === 'ArrowDown') {
+      if (!items.length) return;
+      e.preventDefault();
+      activeIdx = (activeIdx + 1) % items.length;
+      renderMatches(getMatches(input.value.trim()));
+    } else if (e.key === 'ArrowUp') {
+      if (!items.length) return;
+      e.preventDefault();
+      activeIdx = (activeIdx - 1 + items.length) % items.length;
+      renderMatches(getMatches(input.value.trim()));
+    } else if (e.key === 'Enter') {
+      if (activeIdx >= 0 && items[activeIdx]) {
+        e.preventDefault();
+        selectCity(items[activeIdx].getAttribute('data-name'));
+      }
+    } else if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
 }
 
 // ─── Подсказки-сравнения имущества vs долг (точная копия из прототипа) ───────────
