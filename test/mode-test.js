@@ -127,7 +127,8 @@ const SDK_STUB = `(function(){window.BX24={init:function(cb){setTimeout(cb,0);},
   setTimeout(function(){cb&&cb({data:function(){return d;},error:function(){return false;},total:function(){return 0;},more:function(){return false;}});},0);return true;},
   callBatch:function(c,cb){var o={};Object.keys(c).forEach(function(k){var mm=c[k][0];var dd=(mm==="crm.lead.get")?{ID:"${LEAD_ID}",TITLE:"Лид (SDK)",CONTACT_ID:"0"}:(mm==="user.current"?{ID:"1",NAME:"Test"}:[]);o[k]={data:function(){return dd;},error:function(){return false;},total:function(){return 0;},more:function(){return false;}};});
   setTimeout(function(){cb&&cb(o);},0);return true;},
-  callBind:function(){return true;},callUnbind:function(){return true;},installFinish:function(){},getAuth:function(){return {access_token:"x"};},fitWindow:function(){},resizeWindow:function(){}};})();`;
+  callBind:function(){return true;},callUnbind:function(){return true;},installFinish:function(){},getAuth:function(){return {access_token:"x"};},
+  fitWindow:function(cb){window.__fitWindowCalls=(window.__fitWindowCalls||0)+1;if(typeof cb==="function")cb();},resizeWindow:function(){}};})();`;
 
 async function run() {
   const HOST = 'apcheit.ru';
@@ -216,6 +217,14 @@ async function run() {
       }, { timeout: 8000 }).catch(() => {});
       formShown = await frame.evaluate(() => { const f = document.getElementById('anketa-form'); return !!(f && !f.classList.contains('hidden')); });
     }
+    // fitWindow вызывается дебаунсированно (150 мс) после APP_READY — ждём,
+    // пока счётчик в SDK-стабе станет > 0, и убеждаемся, что реальный
+    // SDK-путь действительно дёргает BX24.fitWindow (а не молча no-op).
+    let fitWindowCalls = 0;
+    if (frame) {
+      await frame.waitForFunction(() => (window.__fitWindowCalls || 0) > 0, { timeout: 4000 }).catch(() => {});
+      fitWindowCalls = await frame.evaluate(() => window.__fitWindowCalls || 0);
+    }
     const sdkError = errors.some(e => /BX24 SDK не загружен|BX24 is not defined|BX24.*undefined/.test(e));
     // logUrl must point at logs.txt and must NOT carry DOMAIN/APP_SID/query/hash.
     const logUrlOk = !!logUrl && /\/logs\.txt$/.test(logUrl) && !/[?#]|DOMAIN|APP_SID/i.test(logUrl);
@@ -231,6 +240,7 @@ async function run() {
     console.log('SDK-error       =', sdkError, '(expect false)');
     console.log('logUrl          =', logUrl);
     console.log('logUrl OK       =', logUrlOk, '(expect true: ends /logs.txt, no query/DOMAIN)');
+    console.log('fitWindow calls =', fitWindowCalls, '(expect >= 1: SDK path calls BX24.fitWindow)');
     if (errors.length) console.log('console errors:\n' + errors.join('\n'));
 
     if (!frame) failures.push('B: iframe with index.php not found');
@@ -242,6 +252,7 @@ async function run() {
     if (!formShown) failures.push('B: form did not render via SDK');
     if (sdkError) failures.push('B: SDK-not-loaded error appeared');
     if (!logUrlOk) failures.push('B: logUrl is wrong (does not point at logs.txt / carries query)');
+    if (fitWindowCalls < 1) failures.push('B: BX24.fitWindow was never called on the SDK path');
 
     await page.close();
     psrv.close();

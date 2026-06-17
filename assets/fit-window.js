@@ -1,34 +1,41 @@
 /**
- * fit-window.js — авто-подгонка высоты фрейма приложения под контент.
+ * fit-window.js — безопасная обёртка над официальным BX24.fitWindow.
  *
- * Обёртка над BX24.fitWindow из официального SDK Битрикс24:
+ * SDK-докуметация:
  *   https://apidocs.bitrix24.ru/sdk/bx24-js-sdk/additional-functions/bx24-fit-window.html
+ * BX24.fitWindow() просит портал изменить высоту iframe приложения под высоту
+ * контента документа (внутри использует BX24.getScrollSize().scrollHeight).
  *
- * BX24.fitWindow() отправляет порталу команду изменить высоту iframe приложения
- * под высоту контента (внутри использует BX24.getScrollSize().scrollHeight).
- * Вызывать её имеет смысл только в реальном iframe Битрикс24 — на standalone /
- * прототипе / в dev-режиме (webhook-shim) функции BX24.fitWindow нет, поэтому
- * все вызовы здесь безопасно превращаются в no-op и НИЧЕГО не ломают.
+ * ─── ВАЖНОЕ ОГРАНИЧЕНИЕ ПО ТЕКУЩЕМУ МАКЕТУ ──────────────────────────────────
+ * Приложение встроено как вкладка CRM_LEAD_DETAIL_TAB и СОЗНАТЕЛЬНО свёрстано
+ * фиксированным двухпанельным макетом (см. docs/design-system.md):
+ *     html, body { overflow: hidden; }
+ *     #app       { height: 100vh; overflow: hidden; }
+ *     .panel-scroll / .overflow-y-auto — внутренний скролл панелей.
+ * При таком макете документ НИКОГДА не выходит за пределы вьюпорта, поэтому
+ * getScrollSize().scrollHeight ≈ текущая высота фрейма, и fitWindow по сути
+ * выполняет no-op (высота уже равна вьюпорту). Это НЕ баг этого модуля —
+ * авто-подгонка под контент и фиксированный вьюпорт взаимоисключающи.
  *
- * Высота контента меняется во многих местах (рендер формы, показ/скрытие
- * уточняющих блоков, панель бронирования и слоты, сообщения валидации, статус
- * сохранения). Чтобы не расставлять вызовы вручную в каждом из них, помимо
- * явной функции fitWindow() здесь есть startFitWindowObserver(): он вешает
- * MutationObserver на корневой контейнер и сам дёргает (дебаунсированный)
- * fitWindow при любом изменении DOM/атрибутов.
+ * Поэтому здесь НЕТ всегда-включённого MutationObserver (он давал бы лишние
+ * вызовы и риск осцилляции высоты, ничего при этом не подгоняя). Вместо этого
+ * fitWindow вызывается точечно в ключевых точках жизненного цикла. Если макет
+ * когда-нибудь станет «растущим под контент» (убраны 100vh/overflow:hidden),
+ * эти же вызовы начнут корректно подгонять высоту без изменений здесь.
+ *
+ * Вне iframe Битрикс24 (dev/standalone/прототип, webhook-shim из
+ * assets/webhook-client.js — он НЕ реализует fitWindow) все вызовы безопасно
+ * превращаются в no-op.
  */
 
-// Задержка дебаунса в мс. fitWindow дешёвая, но при пакетных изменениях DOM
-// (рендер всей формы за один тик) разумно схлопнуть серию вызовов в один.
+// Дебаунс: при серии изменений высоты подряд порталу уходит один вызов.
 const DEBOUNCE_MS = 150;
 
 let _debounceTimer = null;
-let _observer = null;
 
 /**
- * _bx24FitAvailable() — true только если доступен настоящий SDK с fitWindow.
- * Webhook-shim (assets/webhook-client.js) метод не реализует, поэтому проверка
- * заодно отсекает dev/standalone-режим.
+ * _bx24FitAvailable() — true только при настоящем SDK с методом fitWindow.
+ * Заодно отсекает dev/standalone (webhook-shim метод не реализует).
  */
 function _bx24FitAvailable() {
   return typeof window !== 'undefined' &&
@@ -38,78 +45,41 @@ function _bx24FitAvailable() {
 
 /**
  * fitWindowNow — немедленно (без дебаунса) просит портал подогнать высоту фрейма.
- * Вне iframe Битрикс24 — тихий no-op.
+ * Вне iframe портала — тихий no-op (с вызовом callback для совместимости).
  *
  * @param {Function} [callback] — необязательный колбэк, прокидывается в
  *        BX24.fitWindow (по SDK вызывается после отправки команды порталу).
+ * @returns {boolean} true, если команда реально отправлена в SDK; иначе false.
  */
 export function fitWindowNow(callback) {
   if (!_bx24FitAvailable()) {
-    // Не в iframe портала (dev/standalone) — подгонять нечего.
     if (typeof callback === 'function') callback();
-    return;
+    return false;
   }
   try {
     window.BX24.fitWindow(typeof callback === 'function' ? callback : undefined);
+    return true;
   } catch (e) {
     // fitWindow не должна влиять на работу приложения — глушим любые сбои SDK.
     console.warn('fitWindow: не удалось подогнать высоту фрейма', e);
+    return false;
   }
 }
 
 /**
- * fitWindow — дебаунсированная версия fitWindowNow. Использовать по умолчанию:
- * при серии изменений высоты подряд порталу уйдёт один вызов, а не десяток.
+ * fitWindow — дебаунсированная версия fitWindowNow. Использовать по умолчанию
+ * в точках, где высота контента могла измениться.
+ *
+ * @param {Function} [callback] — прокидывается в SDK-вызов после дебаунса.
  */
-export function fitWindow() {
-  if (!_bx24FitAvailable()) return; // дешёвый ранний выход вне портала
+export function fitWindow(callback) {
+  if (!_bx24FitAvailable()) {
+    if (typeof callback === 'function') callback();
+    return;
+  }
   if (_debounceTimer) clearTimeout(_debounceTimer);
   _debounceTimer = setTimeout(function () {
     _debounceTimer = null;
-    fitWindowNow();
+    fitWindowNow(callback);
   }, DEBOUNCE_MS);
-}
-
-/**
- * startFitWindowObserver — автоматически вызывает fitWindow() при любом
- * изменении контента внутри root (добавление/удаление узлов, показ/скрытие
- * блоков через классы, рендер слотов и т.д.).
- *
- * Идемпотентна: повторный вызов не плодит наблюдателей.
- * Вне iframe Битрикс24 наблюдатель не вешается (подгонять всё равно нечего).
- *
- * @param {string} [rootId='app'] — id корневого контейнера приложения.
- */
-export function startFitWindowObserver(rootId = 'app') {
-  if (_observer) return;               // уже запущен
-  if (!_bx24FitAvailable()) return;    // dev/standalone — наблюдатель не нужен
-  if (typeof MutationObserver === 'undefined') return;
-
-  const root = document.getElementById(rootId) || document.body;
-  if (!root) return;
-
-  _observer = new MutationObserver(function () {
-    // Любая мутация → дебаунсированный запрос на подгонку высоты.
-    fitWindow();
-  });
-
-  _observer.observe(root, {
-    childList: true,    // добавление/удаление блоков (рендер формы, слотов, панели)
-    subtree: true,      // во всей вложенности
-    attributes: true,   // показ/скрытие через class="hidden", style и пр.
-    attributeFilter: ['class', 'style']
-  });
-
-  // Первичная подгонка после старта наблюдателя.
-  fitWindow();
-}
-
-/**
- * stopFitWindowObserver — снимает наблюдатель (на случай переинициализации).
- */
-export function stopFitWindowObserver() {
-  if (_observer) {
-    _observer.disconnect();
-    _observer = null;
-  }
 }
