@@ -22,6 +22,7 @@ import { initForm, updateProgress, updateTargetStatusWidget } from './form-init.
 import { saveForm, collectFormData } from './form-submit.js';
 import { initCalendar, setOnRenderComplete } from './calendar-render.js';
 import { setClientCity, loadAllSlots } from './slots.js';
+import { fitWindow, fitWindowNow } from './fit-window.js';
 // target-status.js, mp-config.js, cities.js, webhook-client.js, tz-utils.js —
 // не модули и подключаются отдельными <script> до этого app.js. Они
 // экспортируют функции через window и используются здесь как глобалы.
@@ -60,6 +61,12 @@ window.setOnRenderComplete = setOnRenderComplete;
 logEvent('APP_START', { url: window.location.href });
 
 BX24.init(function () {
+
+  // fitWindow вызывается точечно (после рендера и при сообщениях об ошибке),
+  // а не через всегда-включённый MutationObserver: при фиксированном макете
+  // (#app height:100vh; overflow:hidden — см. docs/design-system.md и
+  // fit-window.js) подгонять нечего, а лишние вызовы давали бы только шум.
+  // Вне iframe Битрикс24 (dev/standalone) каждый вызов — безопасный no-op.
 
   // Получаем информацию о текущем плейсменте (месте встраивания приложения в Bitrix24)
   // Определяем ID лида из двух возможных источников:
@@ -208,6 +215,11 @@ BX24.init(function () {
       // Это нужно для автоматического обновления данных (например, статуса слотов) без перезагрузки страницы
       if (typeof startPolling  === 'function') startPolling();
 
+      // Форма и календарь отрисованы — просим портал подогнать высоту фрейма
+      // под итоговый контент. При текущем фиксированном макете это no-op, но
+      // вызов корректен и сработает, если макет станет «растущим под контент».
+      fitWindow();
+
       logEvent('APP_READY', { leadId: leadId });
     }
   );
@@ -236,6 +248,10 @@ function showError(msg) {
     wrap.classList.remove('hidden');  // Убираем скрывающий класс, чтобы блок стал видимым
     wrap.classList.add('flex');       // Добавляем flex-отображение для корректного позиционирования
   }
+
+  // Блок ошибки мог изменить высоту контента — просим портал подогнать фрейм
+  // немедленно (без дебаунса). При фиксированном макете — no-op, см. fit-window.js.
+  fitWindowNow();
 }
 
 /**
