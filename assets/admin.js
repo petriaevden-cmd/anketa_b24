@@ -36,9 +36,19 @@
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
   // ─── HTTP ────────────────────────────────────────────────────────────────
+  // API живёт в отдельном файле admin-api.php рядом с admin.php.
+  // Относительный путь — чтобы одинаково работало и с /anketa/, и с
+  // /yurclick/anketa-kc/, и с любого подпути.
+  const API_URL = (() => {
+    const here = new URL(window.location.href);
+    here.pathname = here.pathname.replace(/\/admin\.php$/, '/admin-api.php');
+    here.search = '';
+    here.hash = '';
+    return here.toString();
+  })();
+
   async function api(action, opts = {}) {
-    const url = new URL(window.location.href);
-    url.search = '';
+    const url = new URL(API_URL);
     url.searchParams.set('action', action);
     if (opts.query) {
       for (const [k, v] of Object.entries(opts.query)) {
@@ -54,7 +64,7 @@
     const r = await fetch(url.toString(), init);
     let data;
     try { data = await r.json(); }
-    catch { throw new Error(`HTTP ${r.status}: сервер вернул не-JSON`); }
+    catch { throw new Error(`HTTP ${r.status}: сервер вернул не-JSON (проверь что admin-api.php доступен)`); }
     if (!data.ok) throw new Error(data.error || `HTTP ${r.status}`);
     return data;
   }
