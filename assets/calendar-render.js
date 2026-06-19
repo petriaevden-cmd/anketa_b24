@@ -268,17 +268,30 @@ export function renderTable() {
         // data-атрибуты нужны для _highlightSelectedSlot() — поиск кнопки по CSS-селектору.
         btn.dataset.calId  = calId;
         btn.dataset.utcMs  = slot.utcMs;
-        btn.className =
-          'slot-btn w-full rounded-md bg-green-50 border border-green-200 text-green-700 ' +
-          'text-[11px] font-medium px-1.5 py-1 hover:bg-green-100 hover:text-gray-900 hover:border-green-400 ' +
-          'transition-colors whitespace-nowrap tabular-nums';
         // Текст кнопки — время МП (не клиента), чтобы МП понял, когда ему работать.
         const mpTime = fmtHour(slot.utcMs, mp.utc);
         btn.textContent = mpTime;
-        // Tooltip: показывает оба времени — МП и клиента (если TZ клиента известен).
-        btn.title = hasClientTz
-          ? `Время МП: ${mpTime} (UTC+${mp.utc})\nВремя клиента: ${fmtHour(slot.utcMs, _clientUtc)} (UTC+${_clientUtc})`
-          : `Записать на ${mpTime} (UTC+${mp.utc})`;
+
+        if (slot.partial) {
+          // Бледно-красный: первая половина часа уже занята (хвост старой 60-мин. брони).
+          // Слот доступен для записи, но требует внимания МП.
+          btn.className =
+            'slot-btn w-full rounded-md bg-red-50 border border-red-200 text-red-400 ' +
+            'text-[11px] font-medium px-1.5 py-1 hover:bg-red-100 hover:text-red-700 hover:border-red-400 ' +
+            'transition-colors whitespace-nowrap tabular-nums';
+          btn.title = hasClientTz
+            ? `⚠ Первая половина часа занята.\nВремя МП: ${mpTime} (UTC+${mp.utc})\nВремя клиента: ${fmtHour(slot.utcMs, _clientUtc)} (UTC+${_clientUtc})`
+            : `⚠ Первая половина часа занята. Записать на ${mpTime} (UTC+${mp.utc})`;
+        } else {
+          // Зелёный: слот полностью свободен.
+          btn.className =
+            'slot-btn w-full rounded-md bg-green-50 border border-green-200 text-green-700 ' +
+            'text-[11px] font-medium px-1.5 py-1 hover:bg-green-100 hover:text-gray-900 hover:border-green-400 ' +
+            'transition-colors whitespace-nowrap tabular-nums';
+          btn.title = hasClientTz
+            ? `Время МП: ${mpTime} (UTC+${mp.utc})\nВремя клиента: ${fmtHour(slot.utcMs, _clientUtc)} (UTC+${_clientUtc})`
+            : `Записать на ${mpTime} (UTC+${mp.utc})`;
+        }
         // При клике: сначала выделяем кнопку визуально, затем показываем форму подтверждения.
         btn.addEventListener('click', function () {
           _highlightSelectedSlot(calId, slot.utcMs); // Подсветка выбранной кнопки.
@@ -338,6 +351,8 @@ export function renderTable() {
   legend.innerHTML =
     '<span class="flex items-center gap-1.5 text-[11px] text-gray-500">' +
     '<span class="inline-block w-4 h-4 rounded bg-green-50 border border-green-200"></span>Свободно</span>' +
+    '<span class="flex items-center gap-1.5 text-[11px] text-gray-500">' +
+    '<span class="inline-block w-4 h-4 rounded bg-red-50 border border-red-200"></span>Первая половина занята</span>' +
     '<span class="flex items-center gap-1.5 text-[11px] text-gray-500">' +
     '<span class="inline-block w-4 h-4 rounded bg-gray-100 border border-gray-200 opacity-60"></span>Занято</span>' +
     '<span class="flex items-center gap-1.5 text-[11px] text-gray-500">' +

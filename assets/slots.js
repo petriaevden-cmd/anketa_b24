@@ -589,16 +589,28 @@ export function buildFreeSlots(mp, day, busy) {
 
     if (slotEndUtcMs <= now) continue;
 
+    // Занят: событие НАЧАЛОСЬ внутри этого слота → блокируем полностью.
+    // Старые 60-мин. брони не блокируют вторую половину часа — их «хвост»
+    // попадает в условие isPartial ниже, а не сюда.
     const isBusy = busy.some(function (ev) {
       const evFrom = _eventUtcMs(ev, 'DATE_FROM');
       const evTo   = _eventUtcMs(ev, 'DATE_TO');
       if (isNaN(evFrom) || isNaN(evTo)) return false;
-      return slotUtcMs < evTo && slotEndUtcMs > evFrom;
+      return evFrom >= slotUtcMs && evFrom < slotEndUtcMs;
     });
 
     if (isBusy) continue;
 
-    slots.push({ utcMs: slotUtcMs, endUtcMs: slotEndUtcMs, mpUtc: mp.utc });
+    // Частично перекрыт: событие началось в ПРЕДЫДУЩЕМ слоте и заходит сюда хвостом.
+    // Такой слот доступен для бронирования, но показывается бледно-красным.
+    const isPartial = busy.some(function (ev) {
+      const evFrom = _eventUtcMs(ev, 'DATE_FROM');
+      const evTo   = _eventUtcMs(ev, 'DATE_TO');
+      if (isNaN(evFrom) || isNaN(evTo)) return false;
+      return evFrom < slotUtcMs && evTo > slotUtcMs;
+    });
+
+    slots.push({ utcMs: slotUtcMs, endUtcMs: slotEndUtcMs, mpUtc: mp.utc, partial: isPartial });
   }
 
   return slots;
