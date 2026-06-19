@@ -411,21 +411,25 @@ export function fmtBxUTC(utcMs) {
 }
 
 /**
- * Форматирует локальное время для параметров БП «Назначить встречу».
+ * Форматирует время встречи в ISO 8601 для параметров БП «Назначить встречу».
  *
- * БП ожидает локальное время без смещения: `YYYY-MM-DDTHH:MM:SS`.
- * Разработчик Битрикс24 подтвердил: передавать нужно именно локальное время
- * МП (или клиента) — БП сам знает таймзону каждого МП и применяет её при
- * создании события в календаре. Суффикс `+HH:MM` намеренно опущен.
+ * ВАЖНО: БП 40 ожидает именно `YYYY-MM-DDTHH:MM:SS+HH:MM` (с суффиксом offset).
+ * Без суффикса БП не может распарсить дату и не создаёт событие в календаре.
+ * Формат без offset (`YYYY-MM-DDTHH:MM:SS`) тоже не работает — проверено.
  *
  * @param {number} utcMs   Абсолютный момент встречи в UTC, миллисекунды.
  * @param {number} offsetH Смещение целевой TZ от UTC в часах (например, +4 для МП в Самаре).
- * @returns {string}       Строка вида `2026-05-13T14:00:00` (без timezone offset).
+ * @returns {string}       Строка вида `2026-05-13T14:00:00+04:00`.
  */
 export function fmtBpDateTime(utcMs, offsetH) {
   const d = new Date(utcMs + offsetH * 3600000);
   const p = function (n) { return String(n).padStart(2, '0'); };
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00`;
+  const sign = offsetH >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetH);
+  const offH = Math.floor(abs);
+  const offM = Math.round((abs - offH) * 60);
+  const tz = `${sign}${p(offH)}:${p(offM)}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00${tz}`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
