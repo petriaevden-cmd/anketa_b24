@@ -424,7 +424,7 @@ function initCityDropdown(id) {
     clearCityError();
     const warnEl = document.getElementById(`${id}-tz-warn`);
     if (warnEl) {
-      const known = (!val) || (cities[val] !== undefined);
+      const known = (!val) || (typeof getCityTZ === 'function' ? getCityTZ(val) !== null : cities[val] !== undefined);
       warnEl.classList.toggle('hidden', known);
     }
     setClientCity(val);
