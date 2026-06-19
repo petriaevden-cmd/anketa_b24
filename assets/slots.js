@@ -170,7 +170,7 @@ async function _loadWorkScheduleFromList(listId) {
       return;
     }
 
-    schedule[calType] = { utcOffset: utcOffset, workStart: workStart, workEnd: workEnd };
+    schedule[calType] = { utcOffset: utcOffset, workStart: workStart, workEnd: workEnd, name: (el.NAME || '').trim() || null };
     // eslint-disable-next-line no-console
     console.info(`[slots] Список: ${el.NAME || calType} → ${workStart}–${workEnd} UTC+${utcOffset}`);
   });
@@ -258,7 +258,7 @@ export async function loadMpCalendarsFromPortal() {
         const entry = {
           number:      n,
           calType:     calType,
-          short:       `МП ${n}`,
+          short:       (ls && ls.name) ? ls.name : `МП ${n}`,
           utc:         utcOffset,
           from:        from,
           to:          to,
