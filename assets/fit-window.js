@@ -1,79 +1,68 @@
 /**
- * fit-window.js — безопасная обёртка над официальным BX24.fitWindow.
+ * fit-window.js — максимизация iframe приложения в Битрикс24.
  *
- * SDK-докуметация:
- *   https://apidocs.bitrix24.ru/sdk/bx24-js-sdk/additional-functions/bx24-fit-window.html
- * BX24.fitWindow() просит портал изменить высоту iframe приложения под высоту
- * контента документа (внутри использует BX24.getScrollSize().scrollHeight).
+ * Использует BX24.resizeWindow(width, height) для установки размеров фрейма
+ * равными доступной области экрана пользователя (window.screen.availWidth /
+ * availHeight). Портал сам ограничивает размер своим контейнером, поэтому
+ * передача "экрана целиком" надёжно даёт максимально возможный размер.
  *
- * ─── ВАЖНОЕ ОГРАНИЧЕНИЕ ПО ТЕКУЩЕМУ МАКЕТУ ──────────────────────────────────
- * Приложение встроено как вкладка CRM_LEAD_DETAIL_TAB и СОЗНАТЕЛЬНО свёрстано
- * фиксированным двухпанельным макетом (см. docs/design-system.md):
- *     html, body { overflow: hidden; }
- *     #app       { height: 100vh; overflow: hidden; }
- *     .panel-scroll / .overflow-y-auto — внутренний скролл панелей.
- * При таком макете документ НИКОГДА не выходит за пределы вьюпорта, поэтому
- * getScrollSize().scrollHeight ≈ текущая высота фрейма, и fitWindow по сути
- * выполняет no-op (высота уже равна вьюпорту). Это НЕ баг этого модуля —
- * авто-подгонка под контент и фиксированный вьюпорт взаимоисключающи.
+ * BX24.fitWindow() НЕ используется для этой задачи: он подгоняет высоту фрейма
+ * под document.scrollHeight, а при фиксированном макете (overflow:hidden /
+ * height:100vh) scrollHeight = текущая высота фрейма → no-op. Кроме того,
+ * fitWindow не меняет ширину.
  *
- * Поэтому здесь НЕТ всегда-включённого MutationObserver (он давал бы лишние
- * вызовы и риск осцилляции высоты, ничего при этом не подгоняя). Вместо этого
- * fitWindow вызывается точечно в ключевых точках жизненного цикла. Если макет
- * когда-нибудь станет «растущим под контент» (убраны 100vh/overflow:hidden),
- * эти же вызовы начнут корректно подгонять высоту без изменений здесь.
+ * SDK-документация:
+ *   https://apidocs.bitrix24.ru/sdk/bx24-js-sdk/additional-functions/bx24-resize-window.html
  *
- * Вне iframe Битрикс24 (dev/standalone/прототип, webhook-shim из
- * assets/webhook-client.js — он НЕ реализует fitWindow) все вызовы безопасно
- * превращаются в no-op.
+ * Вне iframe Битрикс24 (dev/standalone, webhook-shim из webhook-client.js)
+ * все вызовы безопасно превращаются в no-op.
  */
 
-// Дебаунс: при серии изменений высоты подряд порталу уходит один вызов.
 const DEBOUNCE_MS = 150;
 
 let _debounceTimer = null;
 
 /**
- * _bx24FitAvailable() — true только при настоящем SDK с методом fitWindow.
- * Заодно отсекает dev/standalone (webhook-shim метод не реализует).
+ * _bx24ResizeAvailable() — true только при настоящем SDK с методом resizeWindow.
  */
-function _bx24FitAvailable() {
+function _bx24ResizeAvailable() {
   return typeof window !== 'undefined' &&
     window.BX24 &&
-    typeof window.BX24.fitWindow === 'function';
+    typeof window.BX24.resizeWindow === 'function';
 }
 
 /**
- * fitWindowNow — немедленно (без дебаунса) просит портал подогнать высоту фрейма.
- * Вне iframe портала — тихий no-op (с вызовом callback для совместимости).
+ * fitWindowNow — немедленно просит портал развернуть фрейм на максимум.
+ * Использует BX24.resizeWindow(availWidth, availHeight).
+ * Вне iframe портала — тихий no-op (callback всё равно вызывается).
  *
- * @param {Function} [callback] — необязательный колбэк, прокидывается в
- *        BX24.fitWindow (по SDK вызывается после отправки команды порталу).
- * @returns {boolean} true, если команда реально отправлена в SDK; иначе false.
+ * @param {Function} [callback]
+ * @returns {boolean} true, если команда отправлена в SDK.
  */
 export function fitWindowNow(callback) {
-  if (!_bx24FitAvailable()) {
+  if (!_bx24ResizeAvailable()) {
     if (typeof callback === 'function') callback();
     return false;
   }
   try {
-    window.BX24.fitWindow(typeof callback === 'function' ? callback : undefined);
+    const w = (window.screen && window.screen.availWidth)  || 9999;
+    const h = (window.screen && window.screen.availHeight) || 9999;
+    const cb = typeof callback === 'function' ? callback : undefined;
+    window.BX24.resizeWindow(w, h, cb);
     return true;
   } catch (e) {
-    // fitWindow не должна влиять на работу приложения — глушим любые сбои SDK.
-    console.warn('fitWindow: не удалось подогнать высоту фрейма', e);
+    console.warn('fit-window: не удалось изменить размер фрейма', e);
     return false;
   }
 }
 
 /**
- * fitWindow — дебаунсированная версия fitWindowNow. Использовать по умолчанию
- * в точках, где высота контента могла измениться.
+ * fitWindow — дебаунсированная версия fitWindowNow.
  *
- * @param {Function} [callback] — прокидывается в SDK-вызов после дебаунса.
+ * @param {Function} [callback]
  */
 export function fitWindow(callback) {
-  if (!_bx24FitAvailable()) {
+  if (!_bx24ResizeAvailable()) {
     if (typeof callback === 'function') callback();
     return;
   }
