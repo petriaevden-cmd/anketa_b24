@@ -259,21 +259,25 @@ export function bookSlot(calId, slot) {
   const clientOffset    = (_clientUtc !== null) ? _clientUtc : mp.utc;
   const dateTimeClient  = fmtBpDateTime(slot.utcMs, clientOffset);
 
-  // В БП «Назначить встречу» передаём числовой enum-ID варианта поля
-  // UF_CRM_1747120414 — БП использует его как идентификатор менеджера и
-  // пишет это же значение в лид. Если enumId не задан (например, новый МП
-  // без enum-варианта в Битриксе) — fallback на calId, чтобы БП хотя бы
-  // получил непустой параметр.
-  const calendarManager = (mp.enumId != null) ? mp.enumId : calId;
+  // Для БП CalendarMenager ожидает строку "Менеджер N" (N=1..8) —
+  // это option-ключи select-параметра шаблона БП #40, не enum-ID поля.
+  // Для crm.lead.update используем mp.enumId (числовой enum-ID UF_CRM_1747120414).
+  const bpCalendarMenager = (mp.number >= 1 && mp.number <= 8)
+    ? `Менеджер ${mp.number}`
+    : null;
+
+  // Для БП ConsultationChannel ожидает текстовую метку ("WhatsApp", "Telegram" …) —
+  // option-ключи select-параметра шаблона БП #40, не enum-ID поля.
+  // channelLabel уже содержит нужный текст (совпадает с option-ключами БП).
+  // Для crm.lead.update используем channel (enum-ID UF_CRM_1755609681).
 
   // Запускаем бизнес-процесс Bitrix24 «Назначить встречу» через REST API.
-  // Параметр CelNeCel — обязательный в БП, ссылается на enum-поле
-  // UF_CRM_1649136704 (289=Целевой, 290=Нецелевой, 291=Не определено).
+  // CelNeCel — internalselect, ссылается на UF_CRM_1649136704: передаём enum-ID.
   const bpParams = {
     'DateTime':            dateTimeMp,
     'DateTimeClient':      dateTimeClient,
-    'CalendarMenager':     String(calendarManager),  // BP ожидает строку
-    'ConsultationChannel': String(channel),
+    'CalendarMenager':     bpCalendarMenager,   // "Менеджер 1".."Менеджер 8"
+    'ConsultationChannel': channelLabel,         // "WhatsApp", "Telegram" …
     'CelNeCel':            String(targetStatus.id)
   };
   // eslint-disable-next-line no-console
@@ -314,18 +318,15 @@ export function bookSlot(calId, slot) {
     // eslint-disable-next-line no-console
     console.info('[booking] БП запущен, workflow ID:', result.data());
 
-    // Записываем поля лида напрямую — не полагаемся на то, что БП
-    // правильно примет наши параметры и запишет их сам.
-    // UF_CRM_1747120414 — «Менеджер встречи» (enum: 2099–5101)
-    // UF_CRM_1755609681 — «Канал консультации» (enum: 4280, 4281, 4340, 5424, 5442)
-    // UF_CRM_1649136704 — «Целевой/Нецелевой КЦ» (enum: 289, 290, 291)
+    // Записываем поля лида напрямую через enum-ID (не текстовые метки БП).
+    // UF_CRM_1747120414 — «Менеджер встречи»   (mp.enumId, числовой enum)
+    // UF_CRM_1755609681 — «Канал консультации» (channel, enum-ID: 4280/4281/…)
+    // UF_CRM_1649136704 — «Целевой/Нецелевой» (enum-ID: 289/290/291)
+    const crmFields = { UF_CRM_1755609681: String(channel), UF_CRM_1649136704: String(targetStatus.id) };
+    if (mp.enumId != null) crmFields['UF_CRM_1747120414'] = String(mp.enumId);
     BX24.callMethod('crm.lead.update', {
       ID: leadId,
-      FIELDS: {
-        UF_CRM_1747120414: String(calendarManager),
-        UF_CRM_1755609681: String(channel),
-        UF_CRM_1649136704: String(targetStatus.id)
-      }
+      FIELDS: crmFields
     }, function (upd) {
       if (upd.error()) {
         // eslint-disable-next-line no-console
