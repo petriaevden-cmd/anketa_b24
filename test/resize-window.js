@@ -1,16 +1,15 @@
 // =============================================================================
-// test/fit-window-test.js
+// test/resize-window.js
 // =============================================================================
 //
-// Unit-тест на assets/fit-window.js. Проверяет, что обёртка над
-// BX24.resizeWindow:
-//   1. реально вызывает BX24.resizeWindow в SDK-режиме (fitWindowNow);
-//   2. передаёт корректные размеры (availWidth × availHeight);
+// Проверяет resize-window.js (BX24.resizeWindow):
+//   1. вызывает BX24.resizeWindow немедленно (fitWindowNow);
+//   2. передаёт ширину=0 и высоту=75% screen.availHeight;
 //   3. прокидывает callback в SDK;
-//   4. дебаунсит серию вызовов fitWindow() в один вызов SDK;
-//   5. безопасно становится no-op вне портала (нет BX24.resizeWindow).
+//   4. дебаунсит серию вызовов в один вызов SDK;
+//   5. no-op вне портала (нет BX24.resizeWindow).
 //
-//   node test/fit-window-test.js
+//   node test/resize-window.js
 //
 // =============================================================================
 
@@ -53,7 +52,7 @@ globalThis.window = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 (async function main() {
-  const { fitWindow, fitWindowNow } = await import('../assets/fit-window.js');
+  const { fitWindow, fitWindowNow } = await import('../assets/resize-window.js');
 
   // ── 1. SDK-режим: fitWindowNow вызывает BX24.resizeWindow немедленно ────────
   resizeCalls = 0;

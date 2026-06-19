@@ -22,7 +22,7 @@ import { initForm, updateProgress, updateTargetStatusWidget } from './form-init.
 import { saveForm, collectFormData } from './form-submit.js';
 import { initCalendar, setOnRenderComplete } from './calendar-render.js';
 import { setClientCity, loadAllSlots } from './slots.js';
-import { fitWindow, fitWindowNow } from './fit-window.js';
+import { fitWindow, fitWindowNow } from './resize-window.js';
 // target-status.js, mp-config.js, cities.js, webhook-client.js, tz-utils.js —
 // не модули и подключаются отдельными <script> до этого app.js. Они
 // экспортируют функции через window и используются здесь как глобалы.

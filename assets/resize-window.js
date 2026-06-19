@@ -1,15 +1,11 @@
 /**
- * fit-window.js — максимизация iframe приложения в Битрикс24.
+ * resize-window.js — увеличение iframe приложения в Битрикс24.
  *
- * Использует BX24.resizeWindow(width, height) для установки размеров фрейма
- * равными доступной области экрана пользователя (window.screen.availWidth /
- * availHeight). Портал сам ограничивает размер своим контейнером, поэтому
- * передача "экрана целиком" надёжно даёт максимально возможный размер.
+ * Устанавливает высоту iframe равной 75% от screen.availHeight пользователя
+ * через BX24.resizeWindow(0, height) — ширину не меняет (0 = оставить как есть).
  *
- * BX24.fitWindow() НЕ используется для этой задачи: он подгоняет высоту фрейма
- * под document.scrollHeight, а при фиксированном макете (overflow:hidden /
- * height:100vh) scrollHeight = текущая высота фрейма → no-op. Кроме того,
- * fitWindow не меняет ширину.
+ * BX24.fitWindow() НЕ используется: он подгоняет высоту под document.scrollHeight,
+ * а при фиксированном макете (overflow:hidden / height:100vh) это no-op.
  *
  * SDK-документация:
  *   https://apidocs.bitrix24.ru/sdk/bx24-js-sdk/additional-functions/bx24-resize-window.html
@@ -50,7 +46,7 @@ export function fitWindowNow(callback) {
     window.BX24.resizeWindow(0, h, cb);
     return true;
   } catch (e) {
-    console.warn('fit-window: не удалось изменить размер фрейма', e);
+    console.warn('resize-window: не удалось изменить размер фрейма', e);
     return false;
   }
 }
