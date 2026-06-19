@@ -41,7 +41,7 @@ export function fitWindowNow(callback) {
     return false;
   }
   try {
-    const h = Math.round(((window.screen && window.screen.availHeight) || 900) * 0.75);
+    const h = Math.round(((window.screen && window.screen.availHeight) || 900) * 0.85);
     const cb = typeof callback === 'function' ? callback : undefined;
     window.BX24.resizeWindow(0, h, cb);
     return true;

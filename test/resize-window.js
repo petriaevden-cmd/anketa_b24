@@ -62,7 +62,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // ── 2. Передаёт правильные размеры (ширина=0, высота=75% availHeight) ────
   assert(lastW === 0, 'fitWindowNow передаёт 0 как ширину (не меняет)');
-  assert(lastH === 810, 'fitWindowNow передаёт 75% screen.availHeight как высоту (1080*0.75=810)');
+  assert(lastH === 918, 'fitWindowNow передаёт 85% screen.availHeight как высоту (1080*0.85=918)');
 
   // ── 3. callback прокидывается в SDK ──────────────────────────────────────
   lastCallbackInvoked = false;
