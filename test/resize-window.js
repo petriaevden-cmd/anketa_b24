@@ -30,15 +30,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       resizeWindow: (w, h, cb) => { resizeCalls++; lastW = w; lastH = h; if (typeof cb === 'function') { lastCb = true; cb(); } },
       fitWindow:    (cb)       => { fitCalls++;                           if (typeof cb === 'function') cb(); }
     },
-    screen: { availWidth: 1920, availHeight: 1080 }
+    screen: { availWidth: 1920, availHeight: 1080 },
+    innerWidth: 1200
   };
 
   const sent = fitWindowNow();
   assert(sent === true,      'fitWindowNow возвращает true (resizeWindow доступен)');
   assert(resizeCalls === 1,  'вызывает BX24.resizeWindow один раз');
   assert(fitCalls === 0,     'BX24.fitWindow не вызывается когда есть resizeWindow');
-  assert(lastW === 0,        'ширина = 0 (не меняется)');
-  assert(lastH === 918,      'высота = 85% × 1080 = 918');
+  assert(lastW === 1200,     'ширина = window.innerWidth (текущая, не меняется)');
+  assert(lastH === 920,      'высота = screen.availHeight(1080) - 160 = 920');
 
   // ── 2. callback ──────────────────────────────────────────────────────────
   lastCb = false;

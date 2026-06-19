@@ -32,8 +32,13 @@ export function fitWindowNow(callback) {
   const cb = typeof callback === 'function' ? callback : undefined;
   try {
     if (typeof window.BX24.resizeWindow === 'function') {
-      const h = Math.round(((window.screen && window.screen.availHeight) || 900) * 0.85);
-      window.BX24.resizeWindow(0, h, cb);
+      // Ширина: текущая ширина фрейма (не меняем).
+      // Высота: доступная высота экрана минус хром B24
+      //   (~50px шапка + ~50px подшапка + ~44px табы + ~16px отступы = ~160px).
+      const w = window.innerWidth  || 800;
+      const h = ((window.screen && window.screen.availHeight) || 900) - 160;
+      console.info('[resize-window] resizeWindow →', w, 'x', h);
+      window.BX24.resizeWindow(w, h, cb);
       return true;
     }
     if (typeof window.BX24.fitWindow === 'function') {
