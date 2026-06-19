@@ -45,10 +45,9 @@ export function fitWindowNow(callback) {
     return false;
   }
   try {
-    const w = (window.screen && window.screen.availWidth)  || 9999;
-    const h = (window.screen && window.screen.availHeight) || 9999;
+    const h = Math.round(((window.screen && window.screen.availHeight) || 900) * 0.75);
     const cb = typeof callback === 'function' ? callback : undefined;
-    window.BX24.resizeWindow(w, h, cb);
+    window.BX24.resizeWindow(0, h, cb);
     return true;
   } catch (e) {
     console.warn('fit-window: не удалось изменить размер фрейма', e);

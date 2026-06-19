@@ -61,9 +61,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(resizeCalls === 1, 'fitWindowNow вызывает BX24.resizeWindow один раз');
   assert(sent === true, 'fitWindowNow возвращает true, когда команда отправлена');
 
-  // ── 2. Передаёт правильные размеры (screen.availWidth × availHeight) ─────
-  assert(lastW === 1920, 'fitWindowNow передаёт screen.availWidth как ширину');
-  assert(lastH === 1080, 'fitWindowNow передаёт screen.availHeight как высоту');
+  // ── 2. Передаёт правильные размеры (ширина=0, высота=75% availHeight) ────
+  assert(lastW === 0, 'fitWindowNow передаёт 0 как ширину (не меняет)');
+  assert(lastH === 810, 'fitWindowNow передаёт 75% screen.availHeight как высоту (1080*0.75=810)');
 
   // ── 3. callback прокидывается в SDK ──────────────────────────────────────
   lastCallbackInvoked = false;
