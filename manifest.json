@@ -10,7 +10,7 @@
   },
   "install_url": "https://crm.yurclick.com/anketa-kc/install.php",
   "handler_url": "https://crm.yurclick.com/anketa-kc/index.php",
-  "scope": ["crm", "calendar", "user", "im", "placement", "bizproc"],
+  "scope": ["crm", "calendar", "user", "im", "placement", "bizproc", "lists"],
   "placements": [
     {
       "placement": "CRM_LEAD_DETAIL_TAB",

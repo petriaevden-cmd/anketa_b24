@@ -1,39 +1,32 @@
 // =============================================================================
-// assets/slots.js — построение расписания МП (v3)
+// assets/slots.js — построение расписания МП (v4)
 // =============================================================================
 //
-// КАК РАБОТАЕТ РАСПИСАНИЕ В v3 (коротко)
+// КАК РАБОТАЕТ РАСПИСАНИЕ В v4
 // ────────────────────────────────────────────────────────────────────────────
 //
-//   1. На старте loadMpCalendarsFromPortal() делает 11 параллельных
-//      calendar.section.get запросов с type=MP1Vstrechi..MP11Vstrechi.
-//      Из ответа берёт реальный sectionId, имя и CAL_TYPE каждого календаря.
-//      Рабочий график и часовой пояс берутся из MP_WORK_DEFAULTS (mp-config.js),
-//      потому что в ответе calendar.section.get этих полей нет — мы это
-//      проверили discovery-запросом.
+//   1. loadMpCalendarsFromPortal() сначала вызывает _loadWorkScheduleFromList()
+//      — один запрос lists.element.get к универсальному списку B24 (ID=45).
+//      Список содержит: calType, utcOffset, workStart, workEnd для каждого МП.
+//      Это заменяет хардкод MP_WORK_DEFAULTS из v3.
 //
-//   2. На каждый рабочий день loadAllSlots() делает ещё 11 параллельных
-//      calendar.event.get запросов с теми же type=MP[N]Vstrechi. Каждый
-//      ответ — это уже занятость КОНКРЕТНОГО МП, и никакого парсинга
-//      названий «| МП N» больше не нужно. События с DELETED='Y' и
-//      ACCESSIBILITY='free' отфильтровываются — они не блокируют слот.
+//   2. Затем делает 11 параллельных calendar.section.get, берёт sectionId и
+//      имя из Bitrix24, а расписание — из результата шага 1.
 //
-//   3. buildFreeSlots() пересекает рабочий график МП (в TZ МП) с его
-//      занятостью и отдаёт список свободных слотов. TZ клиента на
-//      доступность не влияет — только на отображение времени в заголовках.
+//   3. На каждый рабочий день loadAllSlots() делает 11 параллельных
+//      calendar.event.get. События с DELETED='Y' и ACCESSIBILITY='free'
+//      отфильтровываются.
 //
-// ЧТО УБРАНО ИЗ v2
+//   4. buildFreeSlots() итерируется по слотам с шагом MP_SLOT_MINUTES (30 мин),
+//      пересекает с занятостью и возвращает свободные слоты.
+//
+// ЧТО ИЗМЕНЕНО В v4 (по сравнению с v3)
 // ────────────────────────────────────────────────────────────────────────────
 //
-//   • Хардкод 8 менеджеров в mp-config.js (см. mp-config.js v3).
-//   • Парсинг названий событий регэкспом /\|\s*МП\s*(\d+)\s*$/ — он давал
-//     ложные совпадения, когда исторический company_calendar #17
-//     «МП1 - Сергей Ариков» и новый MP1Vstrechi (#20) пересекались.
-//   • Запрос занятости у единственного техюзера U=137 — теперь у каждого
-//     МП свой календарь, опрашиваем их напрямую.
-//   • Генерация calId как `MP${bitrixUserId}Vstrechi` — давала
-//     несуществующие идентификаторы. Теперь calId это реальный CAL_TYPE
-//     календаря (MP1Vstrechi..MP11Vstrechi).
+//   • MP_WORK_DEFAULTS убран из mp-config.js, заменён на lists.element.get.
+//   • buildFreeSlots: цикл переписан с часового шага (h++) на минутный
+//     (localMin += slotMin) — теперь корректно генерирует 30-минутные слоты.
+//   • manifest.json: добавлен scope "lists" (требует переустановки приложения).
 // =============================================================================
 
 'use strict';
@@ -51,49 +44,185 @@ async function _getRenderTable() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// БЛОК 1: ЗАГРУЗКА КАЛЕНДАРЕЙ МП ИЗ ПОРТАЛА
+// БЛОК 1: ЗАГРУЗКА РАСПИСАНИЯ МП ИЗ УНИВЕРСАЛЬНОГО СПИСКА B24
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * _loadWorkScheduleFromList(listId) — загружает расписание МП из списка B24.
+ *
+ * Алгоритм:
+ *   1. lists.field.get → узнаём коды свойств по их русским названиям.
+ *   2. lists.element.get → читаем все элементы списка.
+ *   3. Разбираем каждый элемент: calType, utcOffset, workStart, workEnd.
+ *
+ * Возвращает словарь: calType → { utcOffset, workStart, workEnd }
+ * При любой ошибке возвращает {} (не роняет приложение — calendar.section.get
+ * продолжит работу с fallback-значениями).
+ *
+ * Требует scope "lists" в manifest.json.
+ *
+ * @param {number} listId — IBLOCK_ID универсального списка (45 на yurclick.com).
+ * @returns {Promise<Object>}
+ */
+async function _loadWorkScheduleFromList(listId) {
+  // Шаг 1: получаем определения полей, чтобы узнать коды свойств (PROPERTY_N).
+  const fieldDefs = await new Promise(function (resolve) {
+    BX24.callMethod('lists.field.get', {
+      IBLOCK_TYPE_ID: 'lists',
+      IBLOCK_ID: listId
+    }, function (result) {
+      if (result.error()) {
+        // eslint-disable-next-line no-console
+        console.warn('[slots] lists.field.get error (нет scope "lists"?):', result.error());
+        return resolve(null);
+      }
+      resolve(result.data() || null);
+    });
+  });
+
+  if (!fieldDefs) return {};
+
+  // Ищем коды нужных полей по их названию в списке.
+  let codeCalType = null, codeUtc = null, codeWorkStart = null, codeWorkEnd = null;
+  let utcDisplayVals = {};
+  Object.keys(fieldDefs).forEach(function (code) {
+    const name = (fieldDefs[code].NAME || '').trim();
+    if      (name === 'ID календарь')    codeCalType   = code;
+    else if (name === 'UTC')           { codeUtc = code; utcDisplayVals = fieldDefs[code].DISPLAY_VALUES_FORM || {}; }
+    else if (name === 'Время работы ОТ') codeWorkStart = code;
+    // B24 поле названо «Время работа ДО» (опечатка в портале), принимаем оба варианта.
+    else if (name === 'Время работы ДО' || name === 'Время работа ДО') codeWorkEnd = code;
+  });
+
+  if (!codeCalType || !codeUtc || !codeWorkStart || !codeWorkEnd) {
+    // eslint-disable-next-line no-console
+    console.warn('[slots] Не найдены поля списка. Доступные:', Object.keys(fieldDefs).map(function (c) {
+      return `${c} = "${fieldDefs[c].NAME}"`;
+    }).join(', '));
+    return {};
+  }
+
+  // Шаг 2: читаем элементы списка.
+  const elements = await new Promise(function (resolve) {
+    BX24.callMethod('lists.element.get', {
+      IBLOCK_TYPE_ID: 'lists',
+      IBLOCK_ID: listId
+    }, function (result) {
+      if (result.error()) {
+        // eslint-disable-next-line no-console
+        console.warn('[slots] lists.element.get error:', result.error());
+        return resolve(null);
+      }
+      resolve(result.data() || null);
+    });
+  });
+
+  if (!elements || !Array.isArray(elements)) return {};
+
+  // Шаг 3: разбираем элементы.
+  // lists.element.get возвращает свойства как { "propValueId": "actualValue" } —
+  // ключ это внутренний ID записи значения, значение — само значение.
+  function _getPropVal(el, code) {
+    const prop = el[code];
+    if (!prop) return '';
+    if (Array.isArray(prop)) return (prop[0] && prop[0].value) ? String(prop[0].value) : '';
+    if (typeof prop === 'object') {
+      if (prop.value !== undefined) return String(prop.value);
+      // Формат B24 lists: { "valueRecordId": "actualValue" }
+      const vals = Object.values(prop);
+      return vals.length ? String(vals[0]) : '';
+    }
+    return String(prop);
+  }
+
+  // Извлекает "HH:MM" из строки вида "10.03.2026 10:00:00" или "2026-03-10T07:00:00+00:00".
+  function _parseTime(raw) {
+    if (!raw) return null;
+    // ISO: T10:00:00
+    const iso = raw.match(/T(\d{2}:\d{2}):\d{2}/);
+    if (iso) return iso[1];
+    // Русский формат: "dd.mm.YYYY HH:MM:SS"
+    const ru = raw.match(/\s(\d{2}:\d{2}):\d{2}$/);
+    if (ru) return ru[1];
+    return null;
+  }
+
+  const schedule = {};
+  elements.forEach(function (el) {
+    const calType = _getPropVal(el, codeCalType).trim();
+    if (!calType) return;
+
+    // UTC: поле хранит enum ID (напр. "305"). Находим текст "+03 UTC" через
+    // DISPLAY_VALUES_FORM и парсим цифру. Fallback: UTC+3.
+    const utcEnumId  = _getPropVal(el, codeUtc);
+    const utcDisplay = utcDisplayVals[utcEnumId] || utcEnumId;
+    const utcMatch   = utcDisplay.match(/([+-]?\d+)/);
+    const utcOffset  = utcMatch ? parseInt(utcMatch[1], 10) : 3;
+
+    // Время работы: нужна только часть HH:MM.
+    // Поле хранит дату+время т.к. B24 не поддерживает поля типа «только время».
+    const workStart = _parseTime(_getPropVal(el, codeWorkStart));
+    const workEnd   = _parseTime(_getPropVal(el, codeWorkEnd));
+
+    if (!workStart || !workEnd) {
+      // eslint-disable-next-line no-console
+      console.warn(`[slots] Список: пропускаем "${el.NAME || calType}" — нет времени работы`);
+      return;
+    }
+
+    schedule[calType] = { utcOffset: utcOffset, workStart: workStart, workEnd: workEnd };
+    // eslint-disable-next-line no-console
+    console.info(`[slots] Список: ${el.NAME || calType} → ${workStart}–${workEnd} UTC+${utcOffset}`);
+  });
+
+  // eslint-disable-next-line no-console
+  console.info(`[slots] Загружено расписаний из списка ${listId}: ${Object.keys(schedule).length}/${elements.length}`);
+  return schedule;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// БЛОК 2: ЗАГРУЗКА КАЛЕНДАРЕЙ МП ИЗ ПОРТАЛА
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
  * loadMpCalendarsFromPortal() → Promise<{ MP1Vstrechi: {...}, ... }>
  *
- * Делает 11 параллельных calendar.section.get запросов и собирает словарь
- * MP_CALENDARS, который потом используется во всём расписании.
+ * 1. Загружает расписание из списка B24 (_loadWorkScheduleFromList).
+ * 2. Параллельно делает N запросов calendar.section.get (по одному на МП).
+ * 3. Для каждого МП объединяет данные из списка (utc, workStart, workEnd)
+ *    с данными из секции (sectionId, name) и из mp-config.js (workDays, enumId).
  *
- * Формат элемента словаря (ключ — CAL_TYPE, например "MP2Vstrechi"):
+ * Формат элемента словаря MP_CALENDARS (ключ — CAL_TYPE, например "MP2Vstrechi"):
  *   {
- *     number:      2,                  // порядковый номер МП (1..11)
- *     calType:     "MP2Vstrechi",      // = ключ словаря, используется в bizproc-параметре
- *     sectionId:   "15",               // реальный ID секции календаря из Bitrix24
- *     name:        "МП2 - Виталий Прилепин", // как написано в Bitrix24
- *     label:       "МП2 - Виталий Прилепин", // для UI карточки бронирования
- *     short:       "МП 2",             // для столбца таблицы и таймлайн-комментария
- *     utc:         4,                  // utcOffset из MP_WORK_DEFAULTS
- *     from:        9,                  // часы начала рабочего дня (для совместимости со старым API)
- *     to:          17,                 // часы конца рабочего дня
- *     workStart:   "09:00",            // полное HH:MM (на будущее, для интеграции с workdays)
- *     workEnd:     "17:00",
- *     workDays:    [1,2,3,4,5],        // дни недели по getDay()
- *     slotMinutes: 60,
- *     enumId:      2100                // null если enum-вариант ещё не создан
+ *     number:      2,
+ *     calType:     "MP2Vstrechi",
+ *     sectionId:   "15",
+ *     name:        "МП2 - Мария Прокопьева",
+ *     label:       "МП2 - Мария Прокопьева",
+ *     short:       "МП 2",
+ *     utc:         3,            // из списка B24
+ *     from:        9,            // часы workStart (целые, для совместимости)
+ *     to:          17,           // часы workEnd
+ *     workStart:   "09:00",      // из списка B24
+ *     workEnd:     "17:00",      // из списка B24
+ *     workDays:    [1,2,3,4,5],  // из MP_WORK_DAYS (mp-config.js)
+ *     slotMinutes: 30,           // из MP_SLOT_MINUTES (mp-config.js)
+ *     enumId:      2100          // из MP_BOOKING_ENUM_MAP (mp-config.js)
  *   }
- *
- * Если какой-то calendar.section.get вернул ошибку или пустой массив —
- * этот МП просто не попадает в словарь. Это нормальный graceful degradation:
- * приложение продолжит работать с теми МП, что доступны.
  */
 export async function loadMpCalendarsFromPortal() {
-  // Список номеров МП берём из глобальной MP_NUMBERS (mp-config.js — обычный
-  // <script>, не ES-модуль, поэтому константы там в window.*).
-  const numbers = (typeof MP_NUMBERS !== 'undefined') ? MP_NUMBERS : [1,2,3,4,5,6,7,8,9,10,11];
-  const enumMap = (typeof MP_BOOKING_ENUM_MAP !== 'undefined') ? MP_BOOKING_ENUM_MAP : {};
-  const defaults = (typeof MP_WORK_DEFAULTS !== 'undefined') ? MP_WORK_DEFAULTS : {};
+  const numbers       = (typeof MP_NUMBERS          !== 'undefined') ? MP_NUMBERS          : [1,2,3,4,5,6,7,8,9,10,11];
+  const enumMap       = (typeof MP_BOOKING_ENUM_MAP !== 'undefined') ? MP_BOOKING_ENUM_MAP : {};
+  const workDaysMap   = (typeof MP_WORK_DAYS        !== 'undefined') ? MP_WORK_DAYS        : {};
+  const slotMinutes   = (typeof MP_SLOT_MINUTES     !== 'undefined') ? MP_SLOT_MINUTES     : 30;
+  const listId        = (typeof MP_LIST_ID          !== 'undefined') ? MP_LIST_ID          : 45;
+  const isDev         = (typeof APP_CONFIG          !== 'undefined') && APP_CONFIG.appEnv === 'dev';
+  const devSectionIds = (typeof MP_DEV_SECTION_IDS  !== 'undefined') ? MP_DEV_SECTION_IDS  : {};
 
-  // DEV и CRM используют одинаковые типы MP[N]Vstrechi, но разные ID секций.
-  // Фоллбэк: если секция не нашлась по типу и окружение DEV и есть ID в MP_DEV_SECTION_IDS —
-  // используем хардкодный ID как запасной вариант.
-  const isDev = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.appEnv === 'dev');
-  const devSectionIds = (typeof MP_DEV_SECTION_IDS !== 'undefined') ? MP_DEV_SECTION_IDS : {};
+  // Загружаем расписание из B24 списка (заменяет MP_WORK_DEFAULTS).
+  const listSchedule = await _loadWorkScheduleFromList(listId);
+
+  const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5]; // Пн-Пт по умолчанию
 
   const promises = numbers.map(function (n) {
     return new Promise(function (resolve) {
@@ -107,54 +236,54 @@ export async function loadMpCalendarsFromPortal() {
           return resolve(null);
         }
 
+        const calType  = `MP${n}Vstrechi`;
         const sections = result.data() || [];
-        const wd = defaults[n] || {
-          workStart: '09:00', workEnd: '18:00',
-          workDays: [1,2,3,4,5], utcOffset: 3, slotMinutes: 60
+
+        // Расписание: берём из списка, при отсутствии — минимальный fallback.
+        const ls        = listSchedule[calType] || null;
+        const workStart = ls ? ls.workStart : '09:00';
+        const workEnd   = ls ? ls.workEnd   : '18:00';
+        const utcOffset = ls ? ls.utcOffset : 3;
+        const from      = parseInt(workStart.split(':')[0], 10);
+        const to        = parseInt(workEnd.split(':')[0],   10);
+
+        if (!ls) {
+          // eslint-disable-next-line no-console
+          console.warn(`[slots] ${calType}: расписание не найдено в списке, используется fallback 09:00-18:00 UTC+3`);
+        }
+
+        // Дни работы из MP_WORK_DAYS[calType], иначе Mon-Fri.
+        const workDays = workDaysMap[calType] || DEFAULT_WORK_DAYS;
+
+        const entry = {
+          number:      n,
+          calType:     calType,
+          short:       `МП ${n}`,
+          utc:         utcOffset,
+          from:        from,
+          to:          to,
+          workStart:   workStart,
+          workEnd:     workEnd,
+          workDays:    workDays,
+          slotMinutes: slotMinutes,
+          enumId:      (enumMap[n] != null) ? enumMap[n] : null
         };
-        const startH = parseInt(wd.workStart.split(':')[0], 10);
-        const endH   = parseInt(wd.workEnd.split(':')[0], 10);
-        const calType = `MP${n}Vstrechi`;
 
         if (Array.isArray(sections) && sections.length > 0) {
-          // Секция нашлась по типу — берём реальные данные из портала.
           const sec = sections[0];
-          resolve([calType, {
-            number:      n,
-            calType:     calType,
-            sectionId:   sec.ID,
-            name:        sec.NAME || `МП ${n}`,
-            label:       sec.NAME || `МП ${n}`,
-            short:       `МП ${n}`,
-            utc:         wd.utcOffset,
-            from:        startH,
-            to:          endH,
-            workStart:   wd.workStart,
-            workEnd:     wd.workEnd,
-            workDays:    wd.workDays,
-            slotMinutes: wd.slotMinutes || 60,
-            enumId:      (enumMap[n] != null) ? enumMap[n] : null
-          }]);
+          entry.sectionId = sec.ID;
+          entry.name      = sec.NAME || `МП ${n}`;
+          entry.label     = sec.NAME || `МП ${n}`;
+          resolve([calType, entry]);
+
         } else if (isDev && devSectionIds[n]) {
-          // Секция не нашлась по типу, но есть хардкодный DEV-ID — используем его.
           // eslint-disable-next-line no-console
-          console.info(`[slots] DEV фоллбэк: MP${n}Vstrechi не найдена по типу, беру sectionId=${devSectionIds[n]}`);
-          resolve([calType, {
-            number:      n,
-            calType:     calType,
-            sectionId:   String(devSectionIds[n]),
-            name:        `МП ${n}`,
-            label:       `МП ${n}`,
-            short:       `МП ${n}`,
-            utc:         wd.utcOffset,
-            from:        startH,
-            to:          endH,
-            workStart:   wd.workStart,
-            workEnd:     wd.workEnd,
-            workDays:    wd.workDays,
-            slotMinutes: wd.slotMinutes || 60,
-            enumId:      (enumMap[n] != null) ? enumMap[n] : null
-          }]);
+          console.info(`[slots] DEV fallback: ${calType} не найдена по типу, sectionId=${devSectionIds[n]}`);
+          entry.sectionId = String(devSectionIds[n]);
+          entry.name      = `МП ${n}`;
+          entry.label     = `МП ${n}`;
+          resolve([calType, entry]);
+
         } else {
           resolve(null);
         }
@@ -169,12 +298,12 @@ export async function loadMpCalendarsFromPortal() {
   });
 
   // eslint-disable-next-line no-console
-  console.info(`[slots] Загружено календарей МП из портала: ${Object.keys(dict).length}/${numbers.length}`);
+  console.info(`[slots] Загружено календарей МП: ${Object.keys(dict).length}/${numbers.length}`);
   return dict;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// БЛОК 2: TZ КЛИЕНТА (городской справочник)
+// БЛОК 3: TZ КЛИЕНТА (городской справочник)
 // ══════════════════════════════════════════════════════════════════════════════
 
 /**
@@ -415,11 +544,11 @@ function _eventUtcMs(ev, field) {
  * buildFreeSlots(mp, day, busy) — массив свободных слотов для одного МП.
  *
  * Алгоритм:
- *   1. Перебираем часы рабочего дня МП [from..to) в его TZ.
- *   2. Для каждого часа считаем UTC-границы слота.
- *   3. Отбрасываем слоты в прошлом.
- *   4. Если день не входит в workDays МП — слотов в этот день нет.
- *   5. Иначе проверяем пересечение с событиями занятости через _eventUtcMs.
+ *   1. Если день не входит в workDays МП — возвращаем [].
+ *   2. Шагаем по слотам с шагом slotMinutes от workStart до workEnd в TZ МП.
+ *   3. Для каждого слота вычисляем UTC-границы через Date.UTC с минутной арифметикой.
+ *   4. Отбрасываем слоты в прошлом.
+ *   5. Проверяем пересечение с занятыми событиями через _eventUtcMs.
  *
  * Доступность слота определяется ТОЛЬКО рабочим графиком и занятостью МП
  * (в TZ МП). TZ клиента на доступность НЕ влияет — он используется лишь для
@@ -429,18 +558,33 @@ function _eventUtcMs(ev, field) {
  * по времени клиента он выходит за «разумные» рамки рабочего дня.
  */
 export function buildFreeSlots(mp, day, busy) {
-  const cfg       = window.APP_CONFIG || {};
-  const slotMs    = (mp.slotMinutes || cfg.slotMin || 60) * 60000;
-  const now       = Date.now();
-  const slots     = [];
+  const cfg      = window.APP_CONFIG || {};
+  const slotMin  = mp.slotMinutes || cfg.slotMin || 30;
+  const slotMs   = slotMin * 60000;
+  const now      = Date.now();
+  const slots    = [];
 
   // Если МП в этот день не работает — пустой список.
   if (Array.isArray(mp.workDays) && mp.workDays.indexOf(day.getDay()) === -1) {
     return slots;
   }
 
-  for (let h = mp.from; h < mp.to; h++) {
-    const slotUtcMs    = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), h - mp.utc, 0, 0, 0);
+  // Рабочее время в минутах от начала суток (локальное время МП).
+  // Используем workStart/workEnd (HH:MM) для точности — mp.from/mp.to хранят
+  // только целые часы и могут потерять минуты если workStart = "09:30".
+  function _hhmm2min(hhmm) {
+    const parts = (hhmm || '').split(':');
+    return parseInt(parts[0], 10) * 60 + (parseInt(parts[1], 10) || 0);
+  }
+  const startLocalMin = _hhmm2min(mp.workStart) || mp.from * 60;
+  const endLocalMin   = _hhmm2min(mp.workEnd)   || mp.to   * 60;
+
+  // Шагаем по слотам с шагом slotMin.
+  // Date.UTC корректно обрабатывает minutes вне [0,59]: автоматически
+  // переносит в часы/дни, поэтому формула (localMin - mp.utc*60) работает
+  // даже при отрицательном результате (слот МП до полуночи UTC).
+  for (let localMin = startLocalMin; localMin < endLocalMin; localMin += slotMin) {
+    const slotUtcMs    = Date.UTC(day.getFullYear(), day.getMonth(), day.getDate(), 0, localMin - mp.utc * 60, 0, 0);
     const slotEndUtcMs = slotUtcMs + slotMs;
 
     if (slotEndUtcMs <= now) continue;
