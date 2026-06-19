@@ -222,7 +222,7 @@ export async function loadMpCalendarsFromPortal() {
   // Загружаем расписание из B24 списка (заменяет MP_WORK_DEFAULTS).
   const listSchedule = await _loadWorkScheduleFromList(listId);
 
-  const DEFAULT_WORK_DAYS = [1, 2, 3, 4, 5]; // Пн-Пт по умолчанию
+  const DEFAULT_WORK_DAYS = [0, 1, 2, 3, 4, 5, 6]; // каждый день по умолчанию
 
   const promises = numbers.map(function (n) {
     return new Promise(function (resolve) {

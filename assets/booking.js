@@ -269,22 +269,30 @@ export function bookSlot(calId, slot) {
   // Запускаем бизнес-процесс Bitrix24 «Назначить встречу» через REST API.
   // Параметр CelNeCel — обязательный в БП, ссылается на enum-поле
   // UF_CRM_1649136704 (289=Целевой, 290=Нецелевой, 291=Не определено).
+  const bpParams = {
+    'DateTime':            dateTimeMp,
+    'DateTimeClient':      dateTimeClient,
+    'CalendarMenager':     String(calendarManager),  // BP ожидает строку
+    'ConsultationChannel': String(channel),
+    'CelNeCel':            String(targetStatus.id)
+  };
+  // eslint-disable-next-line no-console
+  console.info('[booking] bizproc.workflow.start →', {
+    TEMPLATE_ID: cfg.bpTemplateId || 40,
+    DOCUMENT_ID: ['crm', 'CCrmDocumentLead', `LEAD_${leadId}`],
+    PARAMETERS: bpParams
+  });
   BX24.callMethod('bizproc.workflow.start', {
-    TEMPLATE_ID: cfg.bpTemplateId || 40,                          // ID шаблона БП (настраивается в APP_CONFIG).
-    DOCUMENT_ID: ['crm', 'CCrmDocumentLead', `LEAD_${leadId}`],  // Документ-лид, к которому привязываем встречу.
-    PARAMETERS: {
-      'DateTime':            dateTimeMp,       // Дата/время встречи в TZ МП.
-      'DateTimeClient':      dateTimeClient,   // Дата/время встречи в TZ клиента.
-      'CalendarMenager':     calendarManager,  // Идентификатор календаря МП (опечатка в параметре — намеренно: соответствует настройке БП).
-      'ConsultationChannel': channel,          // Выбранный канал консультации.
-      'CelNeCel':            targetStatus.id   // Целевой/Нецелевой (289/290/291) — итог оценки по стандарту.
-    }
+    TEMPLATE_ID: cfg.bpTemplateId || 40,
+    DOCUMENT_ID: ['crm', 'CCrmDocumentLead', `LEAD_${leadId}`],
+    PARAMETERS: bpParams
   }, function (result) {
     // Снимаем флаг блокировки в любом случае (успех или ошибка).
     _setBookingInProgress(false);
 
     if (result.error()) {
-      // Ошибка запуска БП: показываем сообщение и разблокируем кнопку для повтора.
+      // eslint-disable-next-line no-console
+      console.error('[booking] bizproc.workflow.start error:', result.error());
       showError(`Ошибка запуска БП: ${result.error()}`);
       const confirmBtn = document.getElementById('btn-book-confirm');
       if (confirmBtn) {
@@ -303,16 +311,44 @@ export function bookSlot(calId, slot) {
     // в лид не сохраняет — попытка записать workflow-ID (строку формата
     // "69fdcd7accc.12696764") приводила к 400 «Значение поля должно быть
     // целым числом».
+    // eslint-disable-next-line no-console
+    console.info('[booking] БП запущен, workflow ID:', result.data());
+
+    // Записываем поля лида напрямую — не полагаемся на то, что БП
+    // правильно примет наши параметры и запишет их сам.
+    // UF_CRM_1747120414 — «Менеджер встречи» (enum: 2099–5101)
+    // UF_CRM_1755609681 — «Канал консультации» (enum: 4280, 4281, 4340, 5424, 5442)
+    // UF_CRM_1649136704 — «Целевой/Нецелевой КЦ» (enum: 289, 290, 291)
+    BX24.callMethod('crm.lead.update', {
+      ID: leadId,
+      FIELDS: {
+        UF_CRM_1747120414: String(calendarManager),
+        UF_CRM_1755609681: String(channel),
+        UF_CRM_1649136704: String(targetStatus.id)
+      }
+    }, function (upd) {
+      if (upd.error()) {
+        // eslint-disable-next-line no-console
+        console.warn('[booking] crm.lead.update error:', upd.error());
+      } else {
+        // eslint-disable-next-line no-console
+        console.info('[booking] Поля лида обновлены.');
+      }
+    });
 
     // Пишем информационный комментарий в таймлайн лида.
     // Передаём targetStatus — оценку «Целевой/Нецелевой» и список причин
     // для расширенного комментария по стандарту Нецелевой.
     notifyMpByCalId(calId, slot, fio, channelLabel, targetStatus);
 
-    // Сбрасываем счётчик автопереходов и перезагружаем расписание
-    // (теперь слот будет помечен как занятый).
+    // БП «Назначить встречу» создаёт событие в календаре асинхронно.
+    // Немедленный loadAllSlots() не увидит его и слот останется зелёным
+    // у всех пользователей. Делаем два отложенных перезапроса:
+    //   • через 4 с — накрывает быстрый БП;
+    //   • через 12 с — страховка, если сервер под нагрузкой.
     _setAutoJumpCount(0);
-    loadAllSlots();
+    setTimeout(loadAllSlots, 4000);
+    setTimeout(loadAllSlots, 12000);
 
     // Показываем пользователю подтверждение успешной записи.
     const statusEl = document.getElementById('booking-status');

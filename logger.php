@@ -1,4 +1,8 @@
 <?php
+// Явно задаём UTF-8 для всех mb_* функций и json_encode.
+mb_internal_encoding('UTF-8');
+ini_set('default_charset', 'UTF-8');
+
 /**
  * logger.php — серверный приёмник событий лог-файла.
  *
