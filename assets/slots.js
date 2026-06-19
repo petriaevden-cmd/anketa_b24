@@ -411,28 +411,21 @@ export function fmtBxUTC(utcMs) {
 }
 
 /**
- * Форматирует время встречи в ISO-формат для параметров БП «Назначить встречу».
+ * Форматирует локальное время для параметров БП «Назначить встречу».
  *
- * ВАЖНО: БП 40 ожидает ИМЕННО ISO 8601 (`YYYY-MM-DDTHH:MM:SS+HH:MM`).
- * Раньше функция возвращала русский формат `dd.mm.YYYY HH:MM:SS` — БП не
- * мог его распарсить и записывал в поля лида epoch=0 (`1970-01-01T03:00:00+03:00`).
- * Проверено эмпирическим запуском БП 40 через REST: при ISO поля заполняются
- * корректно, при `dd.mm.YYYY` — ломаются.
+ * БП ожидает локальное время без смещения: `YYYY-MM-DDTHH:MM:SS`.
+ * Разработчик Битрикс24 подтвердил: передавать нужно именно локальное время
+ * МП (или клиента) — БП сам знает таймзону каждого МП и применяет её при
+ * создании события в календаре. Суффикс `+HH:MM` намеренно опущен.
  *
  * @param {number} utcMs   Абсолютный момент встречи в UTC, миллисекунды.
- * @param {number} offsetH Смещение целевой TZ от UTC в часах (например, +3 для МП, +5 для клиента в Самаре).
- * @returns {string}       Строка вида `2026-05-13T14:00:00+03:00`.
+ * @param {number} offsetH Смещение целевой TZ от UTC в часах (например, +4 для МП в Самаре).
+ * @returns {string}       Строка вида `2026-05-13T14:00:00` (без timezone offset).
  */
 export function fmtBpDateTime(utcMs, offsetH) {
   const d = new Date(utcMs + offsetH * 3600000);
   const p = function (n) { return String(n).padStart(2, '0'); };
-  // Знак и величина смещения для суффикса ISO ("+03:00" / "-04:30").
-  const sign = offsetH >= 0 ? '+' : '-';
-  const abs = Math.abs(offsetH);
-  const offH = Math.floor(abs);
-  const offM = Math.round((abs - offH) * 60);
-  const tz = `${sign}${p(offH)}:${p(offM)}`;
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00${tz}`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:00`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
