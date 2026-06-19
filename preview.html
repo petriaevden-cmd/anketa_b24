@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="ru" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Превью v5-latest — Анкета КЦ (дизайн прототипа)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.css" rel="stylesheet" />
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; }
+    .scrollable { overflow-y: auto; }
+    .scrollable::-webkit-scrollbar { width: 4px; }
+    .scrollable::-webkit-scrollbar-track { background: transparent; }
+    .scrollable::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+    /* чуть приглушить секции, чтобы был виден «дизайн прототипа» */
+    section.proto-section { scroll-margin-top: 16px; }
+    /* анимация для бейджа */
+    .badge-anim { transition: all .2s ease; }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800 text-sm antialiased">
+
+<!-- ============== Шапка (как в index.php) ============== -->
+<header class="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-3 shrink-0">
+  <span class="font-bold text-gray-900 text-sm tracking-tight">Анкета</span>
+  <div class="w-px h-4 bg-gray-200"></div>
+  <div class="text-xs text-gray-500 truncate">Лид #60471 — Иванов Алексей Петрович</div>
+  <div class="ml-auto flex items-center gap-2 text-xs text-gray-400">
+    <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
+    <span class="truncate max-w-[160px]">Петров И.И. (КЦ)</span>
+  </div>
+</header>
+
+<!-- ============== Прогресс-бар (как в index.php) ============== -->
+<div class="bg-white border-b border-gray-100 px-4 py-2 shrink-0">
+  <div class="flex items-center justify-between mb-1">
+    <span class="text-xs font-semibold text-gray-700">Заполнено полей</span>
+    <span id="last-saved" class="text-xs text-gray-400">Не сохранено</span>
+  </div>
+  <div class="flex items-center gap-3">
+    <div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+      <div id="progress-bar" class="h-full bg-blue-500 rounded-full transition-all duration-300" style="width:0%"></div>
+    </div>
+    <span id="progress-label" class="text-xs text-gray-400 whitespace-nowrap">0 / 0</span>
+  </div>
+</div>
+
+<!-- ============== Тело: левая колонка (форма) + правая (заглушка) ============== -->
+<div class="flex" style="height: calc(100vh - 90px);">
+
+  <!-- ============== ЛЕВАЯ КОЛОНКА (55%) ============== -->
+  <div class="flex flex-col border-r border-gray-200 bg-gray-50" style="width:55%;min-width:300px;">
+    <form id="anketa-form" class="flex flex-col flex-1 w-full overflow-y-auto overflow-x-hidden" novalidate>
+      <div class="flex flex-col gap-3 px-4 py-3 w-full">
+
+        <!-- ============== СЕКЦИЯ 1. ОБРАЩЕНИЕ ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">1</span>
+            <h2 class="text-sm font-semibold text-gray-900">Как могу к вам обращаться?</h2>
+          </div>
+          <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label for="f-last-name" class="block mb-1 text-sm font-medium text-gray-700">Фамилия</label>
+              <input type="text" id="f-last-name" name="f-last-name" value="Иванов"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="Иванов" autocomplete="off">
+            </div>
+            <div>
+              <label for="f-first-name" class="block mb-1 text-sm font-medium text-gray-700">Имя</label>
+              <input type="text" id="f-first-name" name="f-first-name" value="Алексей"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="Алексей" autocomplete="off">
+            </div>
+            <div>
+              <label for="f-second-name" class="block mb-1 text-sm font-medium text-gray-700">Отчество</label>
+              <input type="text" id="f-second-name" name="f-second-name" value="Петрович"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="Петрович" autocomplete="off">
+            </div>
+            <div class="sm:col-span-3">
+              <label for="f-client-city" class="block mb-1 text-sm font-medium text-gray-700">
+                Город клиента <span class="text-red-500">*</span>
+                <span class="text-blue-400 font-normal ml-1" title="Часовой пояс">→ TZ</span>
+              </label>
+              <input type="text" id="f-client-city" name="f-client-city" value="Москва" list="city-list"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="Город..." autocomplete="off">
+              <datalist id="city-list">
+                <option value="Москва"><option value="Санкт-Петербург"><option value="Екатеринбург">
+                <option value="Новосибирск"><option value="Казань"><option value="Краснодар">
+                <option value="Нижний Новгород"><option value="Ростов-на-Дону">
+              </datalist>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 2. ДОЛГ ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">2</span>
+            <h2 class="text-sm font-semibold text-gray-900">Какая сумма долга и что за долг?</h2>
+          </div>
+          <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label for="f-debt-total" class="block mb-1 text-sm font-medium text-gray-700">Общая сумма долга, ₽</label>
+              <input type="text" inputmode="numeric" id="f-debt-total" name="f-debt-total" value="850 000"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="Например: 850 000" autocomplete="off">
+              <p class="mt-1 text-xs text-gray-400">До 300 000 ₽ процедура обычно невыгодна.</p>
+            </div>
+            <div>
+              <label for="f-creditors" class="block mb-1 text-sm font-medium text-gray-700">Виды долгов / кредиторы</label>
+              <input type="text" id="f-creditors" name="f-creditors" value="Сбер, Тинькофф, Быстрые деньги"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="Кредиты, микрозаймы, кредитные карты…" autocomplete="off">
+            </div>
+          </div>
+          <div class="px-3 pb-3">
+            <span class="block mb-2 text-sm font-medium text-gray-700">Это долг, который не списывается? (алименты, субсидиарка, возмещение вреда)</span>
+            <div class="flex gap-2" role="group" aria-label="Долг не списывается">
+              <label class="flex-1">
+                <input type="radio" name="nonDischargeable" value="Y" class="sr-only peer">
+                <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-red-600">Да</span>
+              </label>
+              <label class="flex-1">
+                <input type="radio" name="nonDischargeable" value="N" class="sr-only peer" checked>
+                <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 3. ПРОСРОЧКИ / ФССП / СПИСАНИЯ ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">3</span>
+            <h2 class="text-sm font-semibold text-gray-900">Платите или есть просрочки?</h2>
+          </div>
+          <div class="px-3 py-3 space-y-4">
+            <div>
+              <label for="f-overdue" class="block mb-1 text-sm font-medium text-gray-700">Платежи / просрочки</label>
+              <input type="text" id="f-overdue" name="f-overdue" value="просрочка 3 месяца"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="Например: просрочка 3 месяца" autocomplete="off">
+            </div>
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Передали приставам (ФССП)?</span>
+              <div class="flex gap-2" role="group" aria-label="Приставы">
+                <label class="flex-1">
+                  <input type="radio" name="fssp" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="fssp" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Списывают с дохода / есть удержания? <span class="text-xs text-blue-500 font-normal">← новое</span></span>
+              <div class="flex gap-2" role="group" aria-label="Списания">
+                <label class="flex-1">
+                  <input type="radio" name="deposit" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="deposit" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 4. ДОХОД ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">4</span>
+            <h2 class="text-sm font-semibold text-gray-900">Доход и зарплатная карта</h2>
+          </div>
+          <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label for="f-official-income" class="block mb-1 text-sm font-medium text-gray-700">Официальный доход, ₽</label>
+              <input type="text" inputmode="numeric" id="f-official-income" name="f-official-income" value="80 000"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="0" autocomplete="off">
+            </div>
+            <div>
+              <label for="f-income-unofficial" class="block mb-1 text-sm font-medium text-gray-700">Неофициальный доход, ₽</label>
+              <input type="text" inputmode="numeric" id="f-income-unofficial" name="f-income-unofficial" value="20 000"
+                     class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                     placeholder="0" autocomplete="off">
+            </div>
+            <div class="sm:col-span-2">
+              <label for="f-salary-card" class="block mb-1 text-sm font-medium text-gray-700">Зарплатная карта</label>
+              <select id="f-salary-card" name="f-salary-card"
+                      class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="">—</option>
+                <option value="sber">Сбербанк</option>
+                <option value="other" selected>Другой банк</option>
+                <option value="none">Нет</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2">
+              <span class="block mb-2 text-sm font-medium text-gray-700">Ипотека?</span>
+              <div class="flex gap-2" role="group" aria-label="Ипотека">
+                <label class="flex-1">
+                  <input type="radio" name="mortgage" value="Y" data-toggle="block-mortgage" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="mortgage" value="N" data-toggle="block-mortgage" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+              <!-- data-toggle: появляется при mortgage=Y -->
+              <div id="block-mortgage" class="hidden mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+                <p class="text-xs text-gray-500">↳ Появится, только если «Да». Сейчас скрыто — кликни «Да» выше.</p>
+                <div>
+                  <label for="f-mortgage-type" class="block mb-1 text-sm font-medium text-gray-700">Тип ипотеки <span class="text-xs text-blue-500 font-normal">← новое</span></label>
+                  <input type="text" id="f-mortgage-type" name="f-mortgage-type" value=""
+                         class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                         placeholder="Например: Сбер, Военная, Семейная">
+                </div>
+                <div>
+                  <label for="f-mortgage-overdue" class="block mb-1 text-sm font-medium text-gray-700">Просрочки по ипотеке <span class="text-xs text-blue-500 font-normal">← новое</span></label>
+                  <input type="text" id="f-mortgage-overdue" name="f-mortgage-overdue" value=""
+                         class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                         placeholder="Описание просрочки">
+                </div>
+                <div>
+                  <span class="block mb-2 text-sm font-medium text-gray-700">Есть созаёмщик/поручитель?</span>
+                  <div class="flex gap-2" role="group" aria-label="Созаёмщик">
+                    <label class="flex-1">
+                      <input type="radio" name="mortgageHasGuarantor" value="Y" class="sr-only peer">
+                      <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                    </label>
+                    <label class="flex-1">
+                      <input type="radio" name="mortgageHasGuarantor" value="N" class="sr-only peer" checked>
+                      <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                    </label>
+                  </div>
+                  <p class="mt-1 text-xs text-gray-400">Инвертируется в formData.mortgageNoGuarantor для target-status.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 5. ЗАЛОГОВОЕ ИМУЩЕСТВО ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">5</span>
+            <h2 class="text-sm font-semibold text-gray-900">Залоговое имущество</h2>
+          </div>
+          <div class="px-3 py-3 space-y-3">
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Есть залоговое имущество по кредитам?</span>
+              <div class="flex gap-2" role="group" aria-label="Залог">
+                <label class="flex-1">
+                  <input type="radio" name="collateral" value="Y" data-toggle="block-collateral" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="collateral" value="N" data-toggle="block-collateral" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <!-- data-toggle: появляется при collateral=Y -->
+            <div id="block-collateral" class="hidden p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+              <p class="text-xs text-gray-500">↳ Появится, только если «Да».</p>
+              <div>
+                <label for="f-collateral-type" class="block mb-1 text-sm font-medium text-gray-700">Тип залога <span class="text-xs text-blue-500 font-normal">← новое</span></label>
+                <input type="text" id="f-collateral-type" name="f-collateral-type" value=""
+                       class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                       placeholder="Квартира, авто, оборудование…">
+              </div>
+              <div>
+                <span class="block mb-2 text-sm font-medium text-gray-700">Готовы расстаться с имуществом?</span>
+                <div class="flex gap-2" role="group" aria-label="Готов расстаться">
+                  <label class="flex-1">
+                    <input type="radio" name="collateralReadyToPart" value="Y" class="sr-only peer">
+                    <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                  </label>
+                  <label class="flex-1">
+                    <input type="radio" name="collateralReadyToPart" value="N" class="sr-only peer" checked>
+                    <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 6. ИМУЩЕСТВО (с репитером) ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">6</span>
+            <h2 class="text-sm font-semibold text-gray-900">Имущество в собственности</h2>
+          </div>
+          <div class="px-3 py-3 space-y-3">
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Есть имущество в собственности?</span>
+              <div class="flex gap-2" role="group" aria-label="Имущество">
+                <label class="flex-1">
+                  <input type="radio" name="property" value="Y" data-toggle="block-property" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="property" value="N" data-toggle="block-property" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <!-- data-toggle: появляется при property=Y -->
+            <div id="block-property" class="hidden p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-3">
+              <p class="text-xs text-gray-500">↳ Репитер. Кликни «+» чтобы добавить позицию.</p>
+              <div id="property-list" class="space-y-2">
+                <!-- первая строка для примера -->
+                <div class="flex items-center gap-2 property-row" data-row="0">
+                  <select name="f-property-type-0" data-property-type
+                          class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 flex-1">
+                    <option value="realty">Недвижимое</option>
+                    <option value="movable">Движимое</option>
+                    <option value="car">Автомобиль</option>
+                  </select>
+                  <input type="text" inputmode="numeric" name="f-property-value-0" data-property-value value="5 000 000"
+                         class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 w-32"
+                         placeholder="Стоимость, ₽">
+                  <button type="button" data-remove-row class="px-2 py-2 text-red-600 hover:bg-red-50 rounded-lg">×</button>
+                </div>
+              </div>
+              <button type="button" id="btn-add-property"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50">
+                + Добавить имущество
+              </button>
+              <div>
+                <span class="block mb-2 text-sm font-medium text-gray-700">Исключить автомобиль из реализации? <span class="text-xs text-blue-500 font-normal">← новое</span></span>
+                <div class="flex gap-2" role="group" aria-label="Исключить авто">
+                  <label class="flex-1">
+                    <input type="checkbox" id="f-exclude-car" name="excludeCar" class="sr-only peer">
+                    <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Исключить</span>
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label for="f-joint-value" class="block mb-1 text-sm font-medium text-gray-700">Стоимость совместного имущества, ₽ <span class="text-xs text-blue-500 font-normal">← новое</span></label>
+                <input type="text" inputmode="numeric" id="f-joint-value" name="f-joint-value" value=""
+                       class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                       placeholder="0">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 7. СДЕЛКИ ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">7</span>
+            <h2 class="text-sm font-semibold text-gray-900">Сделки по отчуждению имущества</h2>
+          </div>
+          <div class="px-3 py-3 space-y-3">
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Совершались за последние 3 года?</span>
+              <div class="flex gap-2" role="group" aria-label="Сделки">
+                <label class="flex-1">
+                  <input type="radio" name="deals" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="deals" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Сделки совершены в период просрочек?</span>
+              <div class="flex gap-2" role="group" aria-label="Сделки в период просрочек">
+                <label class="flex-1">
+                  <input type="radio" name="dealsDuringOverdue" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="dealsDuringOverdue" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Обращение за другого человека?</span>
+              <div class="flex gap-2" role="group" aria-label="За другого">
+                <label class="flex-1">
+                  <input type="radio" name="forOther" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="forOther" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 8. СЕМЕЙНОЕ ПОЛОЖЕНИЕ ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">8</span>
+            <h2 class="text-sm font-semibold text-gray-900">Семейное положение</h2>
+          </div>
+          <div class="px-3 py-3">
+            <label for="f-marital" class="block mb-1 text-sm font-medium text-gray-700">Семейное положение</label>
+            <select id="f-marital" name="f-marital"
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+              <option value="">—</option>
+              <option value="single">Не в браке</option>
+              <option value="married" selected>В браке</option>
+              <option value="divorced">Разведён/а</option>
+              <option value="widow">Вдовец/вдова</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 9. ДЕТИ ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">9</span>
+            <h2 class="text-sm font-semibold text-gray-900">Дети</h2>
+          </div>
+          <div class="px-3 py-3">
+            <label for="f-children" class="block mb-1 text-sm font-medium text-gray-700">Сколько детей</label>
+            <select id="f-children" name="f-children"
+                    class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+              <option value="">—</option>
+              <option value="0">Нет</option>
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+              <option value="3">3+</option>
+            </select>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 10. СУДИМОСТЬ ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">10</span>
+            <h2 class="text-sm font-semibold text-gray-900">Судимость</h2>
+          </div>
+          <div class="px-3 py-3">
+            <span class="block mb-2 text-sm font-medium text-gray-700">Есть судимости?</span>
+            <div class="flex gap-2" role="group" aria-label="Судимости">
+              <label class="flex-1">
+                <input type="radio" name="criminal" value="Y" class="sr-only peer">
+                <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-red-600">Да</span>
+              </label>
+              <label class="flex-1">
+                <input type="radio" name="criminal" value="N" class="sr-only peer" checked>
+                <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 11. ООО / ИП ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">11</span>
+            <h2 class="text-sm font-semibold text-gray-900">Предпринимательство</h2>
+          </div>
+          <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Учредитель ООО?</span>
+              <div class="flex gap-2" role="group" aria-label="ООО">
+                <label class="flex-1">
+                  <input type="radio" name="ooo" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-red-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="ooo" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Зарегистрирован как ИП?</span>
+              <div class="flex gap-2" role="group" aria-label="ИП">
+                <label class="flex-1">
+                  <input type="radio" name="ip" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-red-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="ip" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============== СЕКЦИЯ 12. ПРОЧЕЕ + target-status ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold shrink-0">12</span>
+            <h2 class="text-sm font-semibold text-gray-900">Прочее и статус «Целевой/Нецелевой»</h2>
+            <span id="target-status-badge" class="ml-auto inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800 badge-anim">
+              Не определено
+            </span>
+          </div>
+          <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Другая компания уже подала в АС?</span>
+              <div class="flex gap-2" role="group" aria-label="Другая компания в АС">
+                <label class="flex-1">
+                  <input type="radio" name="otherCompanyAS" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-red-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="otherCompanyAS" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <span class="block mb-2 text-sm font-medium text-gray-700">Невыгодно по расчёту КМ (высокий доход)?</span>
+              <div class="flex gap-2" role="group" aria-label="КМ невыгодно">
+                <label class="flex-1">
+                  <input type="radio" name="incomeKmBad" value="Y" class="sr-only peer">
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-red-600">Да</span>
+                </label>
+                <label class="flex-1">
+                  <input type="radio" name="incomeKmBad" value="N" class="sr-only peer" checked>
+                  <span class="flex items-center justify-center w-full p-2.5 text-sm rounded-lg border border-gray-300 cursor-pointer text-gray-700 peer-checked:bg-blue-600 peer-checked:text-white peer-checked:border-blue-600">Нет</span>
+                </label>
+              </div>
+            </div>
+            <div>
+              <label for="f-channel" class="block mb-1 text-sm font-medium text-gray-700">Канал связи <span class="text-xs text-blue-500 font-normal">← новое</span></label>
+              <select id="f-channel" name="f-channel"
+                      class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                <option value="">—</option>
+                <option value="4280">WhatsApp</option>
+                <option value="4281" selected>Telegram</option>
+                <option value="4340">Max (мессенджер)</option>
+                <option value="5424">SMS</option>
+                <option value="5442">Не отправлять</option>
+              </select>
+            </div>
+            <div>
+              <label for="f-booking-comment" class="block mb-1 text-sm font-medium text-gray-700">Комментарий к записи <span class="text-xs text-blue-500 font-normal">← новое</span></label>
+              <textarea id="f-booking-comment" name="f-booking-comment" rows="2"
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                        placeholder="Любые пометки для встречи"></textarea>
+            </div>
+          </div>
+          <!-- Список причин (target-status) -->
+          <div id="target-status-reasons" class="hidden px-3 py-2 border-t border-gray-100 bg-red-50 text-xs text-red-800">
+            <div class="font-semibold mb-1">Причины:</div>
+            <ul class="list-disc list-inside space-y-0.5" id="target-status-reasons-list"></ul>
+          </div>
+        </section>
+
+        <!-- ============== Заметки менеджера (бывший Блок 4) — внутри секции 12 ============== -->
+        <section class="bg-white border border-gray-200 rounded-lg shadow-sm proto-section">
+          <div class="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-500 text-white text-xs font-bold shrink-0">✎</span>
+            <h2 class="text-sm font-semibold text-gray-900">Заметки менеджера</h2>
+          </div>
+          <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label for="f-km-exclusion" class="block mb-1 text-sm font-medium text-gray-700">Исключение из КМ</label>
+              <textarea id="f-km-exclusion" name="f-km-exclusion" rows="2"
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                        placeholder="Причина..."></textarea>
+            </div>
+            <div>
+              <label for="f-main-pain" class="block mb-1 text-sm font-medium text-gray-700">Основная боль</label>
+              <textarea id="f-main-pain" name="f-main-pain" rows="2"
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                        placeholder="Главная проблема...">Нечем платить, давят приставы</textarea>
+            </div>
+            <div>
+              <label for="f-objections" class="block mb-1 text-sm font-medium text-gray-700">Возражения</label>
+              <textarea id="f-objections" name="f-objections" rows="2"
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                        placeholder="Возражения клиента...">Дорого, не верю в результат</textarea>
+            </div>
+            <div>
+              <label for="f-extra-comment" class="block mb-1 text-sm font-medium text-gray-700">Доп. комментарий</label>
+              <textarea id="f-extra-comment" name="f-extra-comment" rows="2"
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5"
+                        placeholder="Доп. информация..."></textarea>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </form>
+
+    <!-- ============== Футер: Сохранить/Сбросить (как в index.php) ============== -->
+    <div class="bg-white border-t border-gray-200 px-4 py-2 flex items-center gap-2 shrink-0">
+      <button id="btn-save" type="button"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-300 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        Сохранить анкету
+      </button>
+      <button id="btn-reset" type="button"
+              class="inline-flex items-center px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+        Сбросить
+      </button>
+      <span id="save-status" class="ml-auto text-xs text-gray-400"></span>
+    </div>
+  </div>
+
+  <!-- ============== ПРАВАЯ КОЛОНКА (заглушка «Расписание МП») ============== -->
+  <div class="flex flex-col flex-1 bg-gray-50">
+    <div class="bg-white border-b border-gray-200 px-4 py-2 shrink-0 flex items-center gap-2">
+      <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      <span class="text-sm font-semibold text-gray-700">Расписание МП</span>
+    </div>
+    <div class="flex-1 p-3 space-y-2 scrollable">
+      <div class="bg-white border border-gray-200 rounded-lg p-3 text-sm text-gray-500">
+        <p>← это правая панель, <b>не трогаю</b> в v5-latest. Показана для контекста разметки 55%/45%.</p>
+        <p class="mt-2 text-xs">Сюда встанут слоты из <code>assets/calendar-render.js</code> + <code>slots.js</code>.</p>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+        <p class="font-semibold text-gray-700 mb-1">Что проверяется в превью:</p>
+        <ul class="list-disc list-inside text-gray-600 space-y-0.5">
+          <li>12 секций в правильном порядке</li>
+          <li>Y/N радио во всех новых местах (как в прототипе)</li>
+          <li>data-toggle: <b>Ипотека</b> = Да → развернётся блок типа/просрочек/созаёмщика</li>
+          <li>data-toggle: <b>Залог</b> = Да → развернётся тип/готов расстаться</li>
+          <li>data-toggle: <b>Имущество</b> = Да → развернётся репитер + исключить авто + совместная стоимость</li>
+          <li>Репитер имущества: <b>+ Добавить</b>, <b>×</b> удалить</li>
+          <li>target-status badge меняет цвет (мок: долг&lt;300k → красный)</li>
+          <li>Прогресс-бар обновляется (мок)</li>
+          <li>Сохранение показывает JSON-payload (мок)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============== Модалка «payload» (мок) ============== -->
+<div id="payload-modal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+  <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+    <div class="px-4 py-3 border-b flex items-center justify-between">
+      <h3 class="text-base font-semibold text-gray-900">crm.lead.update payload (мок)</h3>
+      <button id="payload-close" class="text-gray-400 hover:text-gray-600">×</button>
+    </div>
+    <pre id="payload-content" class="px-4 py-3 text-xs overflow-auto flex-1 bg-gray-50"></pre>
+  </div>
+</div>
+
+<script src="preview.js"></script>
+</body>
+</html>
