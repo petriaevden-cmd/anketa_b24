@@ -39,7 +39,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   assert(resizeCalls === 1,  'вызывает BX24.resizeWindow один раз');
   assert(fitCalls === 0,     'BX24.fitWindow не вызывается когда есть resizeWindow');
   assert(lastW === 1200,     'ширина = window.innerWidth (текущая, не меняется)');
-  assert(lastH === 920,      'высота = screen.availHeight(1080) - 160 = 920');
+  assert(lastH === 850,      'высота = screen.availHeight(1080) - 230 = 850');
 
   // ── 2. callback ──────────────────────────────────────────────────────────
   lastCb = false;

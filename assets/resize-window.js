@@ -36,7 +36,7 @@ export function fitWindowNow(callback) {
       // Высота: доступная высота экрана минус хром B24
       //   (~50px шапка + ~50px подшапка + ~44px табы + ~16px отступы = ~160px).
       const w = window.innerWidth  || 800;
-      const h = ((window.screen && window.screen.availHeight) || 900) - 160;
+      const h = ((window.screen && window.screen.availHeight) || 900) - 230;
       console.info('[resize-window] resizeWindow →', w, 'x', h);
       window.BX24.resizeWindow(w, h, cb);
       return true;
